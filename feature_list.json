@@ -1,0 +1,105 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Project bootstrap",
+      "description": "Initialize package.json, TypeScript config, pnpm workspace, and install the `skills` dependency",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "package.json, tsconfig.json, pnpm-workspace.yaml, .prettierrc created; pnpm install succeeds; skills package resolves with all exports (resolveSource, installSkills, listSkills, removeSkills)"
+    },
+    {
+      "id": "feat-002",
+      "name": "Core modules",
+      "description": "manifest.ts (zod schema), lockfile.ts, resolve.ts, hash.ts, secrets.ts under src/core",
+      "dependencies": [
+        "feat-001"
+      ],
+      "status": "done",
+      "evidence": "manifest.ts (zod schema), lockfile.ts (read/write/verify, sorted keys, atomic writes, version errors), resolve.ts (fetch collection.json at ref -> commit SHA), hash.ts (manifestHash SHA-256), secrets.ts (pre-publish scanner); pnpm typecheck clean"
+    },
+    {
+      "id": "feat-003",
+      "name": "skills adapter",
+      "description": "src/skills/ wrapper isolating the `skills` dependency (resolveSource, installSkills, listSkills, removeSkills)",
+      "dependencies": [
+        "feat-002"
+      ],
+      "status": "done",
+      "evidence": "src/skills/index.ts wraps resolveSource/installSkills/listSkills/removeSkills; pnpm typecheck clean"
+    },
+    {
+      "id": "feat-004",
+      "name": "git wrappers",
+      "description": "Thin shell wrappers around git under src/git/",
+      "dependencies": [
+        "feat-001"
+      ],
+      "status": "done",
+      "evidence": "src/git/index.ts: git(), resolveRef(), showFileAtCommit(), cloneRepo(); pnpm typecheck clean"
+    },
+    {
+      "id": "feat-005",
+      "name": "cli.ts entry",
+      "description": "Command dispatch with --yes and --json support for all commands",
+      "dependencies": [
+        "feat-002",
+        "feat-003"
+      ],
+      "status": "done",
+      "evidence": "src/cli.ts implements main() with command dispatch; --yes/--json/--debug flags; npx tsx src/cli.ts --help and add --help both work"
+    },
+    {
+      "id": "feat-006",
+      "name": "add command",
+      "description": "Fetch collection.json, install member skills via skills, write kitcrate-lock.json",
+      "dependencies": [
+        "feat-005"
+      ],
+      "status": "done",
+      "evidence": "src/commands/add.ts: resolveCollection, preexisting detection, install via skills, write kitcrate-lock.json with sorted keys; typecheck clean"
+    },
+    {
+      "id": "feat-007",
+      "name": "list command",
+      "description": "Show installed collections and their skills from kitcrate-lock.json",
+      "dependencies": [
+        "feat-006"
+      ],
+      "status": "done",
+      "evidence": "src/commands/list.ts: reads lockfile, lists collections with member skills, --json support; typecheck clean"
+    },
+    {
+      "id": "feat-008",
+      "name": "install, update, remove commands",
+      "description": "install: restore from lockfiles + verify manifestHash; update: re-resolve ref + diff manifests; remove: ownership rules",
+      "dependencies": [
+        "feat-006"
+      ],
+      "status": "done",
+      "evidence": "src/commands/install.ts, update.ts, remove.ts all implemented; typecheck clean"
+    },
+    {
+      "id": "feat-009",
+      "name": "validate and create commands",
+      "description": "Check collection.json and referenced skills; publish flow with secret scan",
+      "dependencies": [
+        "feat-002"
+      ],
+      "status": "done",
+      "evidence": "src/commands/validate.ts: validate collection.json + skill references; src/commands/create.ts: recursive skill discovery (.agents/skills/<name>/SKILL.md etc.), publish gate (writes .gitignore, stages only collection.json+.gitignore+skill folders, unstages credential files, scans tracked content, blocks on credential-bearing history), secret scan, git init/commit/tag, gh repo create; typecheck clean"
+    },
+    {
+      "id": "feat-010",
+      "name": "Tests and verification",
+      "description": "Unit tests for core modules; integration tests with local bare git repos and mocked gh",
+      "dependencies": [
+        "feat-006",
+        "feat-007",
+        "feat-008"
+      ],
+      "status": "done",
+      "evidence": "vitest configured; 44 unit tests pass (manifest, lockfile, hash, secrets, gitignore); pnpm typecheck clean; pnpm lint clean; pnpm build clean"
+    }
+  ]
+}
