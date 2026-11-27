@@ -11,6 +11,11 @@ describe('release tag', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'kitcrate-release-'));
     await git(['init'], root);
+    // These tests commit, and a fresh machine or CI runner has no identity to
+    // commit with. Set one here rather than inherit whatever the host happens
+    // to have, so the suite behaves the same everywhere.
+    await git(['config', 'user.email', 'test@kitcrate.local'], root);
+    await git(['config', 'user.name', 'kitcrate test'], root);
   });
 
   afterEach(async () => {
@@ -21,7 +26,12 @@ describe('release tag', () => {
   async function commitAll(message: string): Promise<string> {
     await writeFile(join(root, 'collection.json'), `{"at":"${message}"}\n`, 'utf8');
     await git(['add', '--', 'collection.json'], root);
-    await git(['commit', '-m', message], root);
+    const committed = await git(['commit', '-m', message], root);
+    // A failed commit would leave the repository empty, and the tag assertions
+    // after it would fail for a reason that has nothing to do with tagging.
+    if (committed.code !== 0) {
+      throw new Error(`Failed to commit "${message}": ${committed.stderr.trim()}`);
+    }
     return (await git(['rev-parse', 'HEAD'], root)).stdout.trim();
   }
 
