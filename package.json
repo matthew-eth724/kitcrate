@@ -1,13 +1,14 @@
 {
   "name": "kitcrate",
   "version": "0.1.0",
-  "description": "Collections layer on top of the skills CLI — install, update, and remove collections of agent skills from git repos.",
+  "description": "Collections layer on top of the skills CLI \u2014 install, update, and remove collections of agent skills from git repos.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "kitcrate": "dist/cli.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.20.0"
   },
   "packageManager": "pnpm@12.23.0",
   "scripts": {

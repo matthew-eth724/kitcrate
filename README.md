@@ -1,6 +1,13 @@
-# kitcrate
+<p align="center">
+  <img src="docs/banner.svg" alt="kitcrate" width="900">
+</p>
 
-**A collections layer on top of [Vercel Labs' `skills` CLI](https://github.com/vercel-labs/skills).** Publish, install, update, and remove whole collections of agent skills from git repositories.
+<p align="center">
+  <a href="https://github.com/matthew-eth724/kitcrate/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/matthew-eth724/kitcrate/ci.yml?branch=main&label=CI"></a>
+  <a href="https://github.com/matthew-eth724/kitcrate/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/matthew-eth724/kitcrate"></a>
+  <a href="https://github.com/matthew-eth724/kitcrate"><img alt="Node.js &gt;= 22.20.0" src="https://img.shields.io/badge/node-%3E%3D22.20.0-3fb950"></a>
+  <a href="https://github.com/matthew-eth724/kitcrate"><img alt="TypeScript strict" src="https://img.shields.io/badge/typescript-strict-3178c6"></a>
+</p>
 
 The `skills` CLI installs individual skills but has no notion of a *collection*. kitcrate adds one: author a collection, publish it to GitHub, install the whole set into a project with one command, and keep it updated as the collection grows.
 
