@@ -58,7 +58,7 @@ describe('list formatting', () => {
         '',
         'Agents: Claude Code, Codex, fx, Gemini CLI, GitHub Copilot +2 more',
         '',
-        'Collection: github:matt711/mywebskills',
+        'Collection: matt711/mywebskills',
         '',
         'Source: acme/webtools',
       ].join('\n')
@@ -122,7 +122,7 @@ describe('list formatting', () => {
 
     expect(text).toContain('account-activity (preexisting) ');
     expect(text.split('\n\n\n')).toHaveLength(1);
-    expect(text).toContain('Collection: github:acme/other');
+    expect(text).toContain('Collection: acme/other');
   });
 
   it('matches a member by name and scope, not by name alone', () => {
@@ -162,6 +162,38 @@ describe('list formatting', () => {
     expect(formatEntry(buildListedEntries([['c', collection()]], [installed()])[0]!)).toContain(
       'Agents: Claude Code'
     );
+  });
+
+  it('shows a GitHub collection and source as owner/repo and leaves a local path alone', () => {
+    const entries = buildListedEntries(
+      [
+        ['web-security', collection({ source: 'https://github.com/matt711/mywebskills.git' })],
+        ['local', collection({ source: '/tmp/collection', skills: ['beta'] })],
+      ],
+      [installed({ source: 'git@github.com:acme/webtools.git' }), installed({ name: 'beta' })]
+    );
+
+    const text = formatList(entries, false);
+
+    expect(text).toContain('Collection: matt711/mywebskills');
+    expect(text).toContain('Source: acme/webtools');
+    expect(text).toContain('Collection: /tmp/collection');
+    expect(text).not.toContain('https://github.com/matt711');
+    expect(text).not.toContain('git@github.com');
+  });
+
+  it('keeps the raw source in the JSON view, the way the lockfile records it', () => {
+    const collections = [
+      ['web-security', collection({ source: 'https://github.com/matt711/mywebskills.git' })],
+    ] as const;
+    const entries = buildListedEntries(collections, [
+      installed({ source: 'git@github.com:acme/webtools.git' }),
+    ]);
+
+    const view = toJsonList(collections, entries);
+
+    expect(view.collections[0]?.source).toBe('https://github.com/matt711/mywebskills.git');
+    expect(view.skills[0]?.source).toBe('git@github.com:acme/webtools.git');
   });
 
   it('carries agent ids next to display names in the JSON view, one row per skill', () => {

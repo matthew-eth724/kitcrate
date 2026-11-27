@@ -1,6 +1,7 @@
 import { homedir } from 'os';
 import { styleText } from 'util';
 import type { CollectionLockEntry, Lockfile } from './lockfile.js';
+import { displaySource } from './source.js';
 import type { InstallScope } from './scope.js';
 
 /** One row of the listing: a skill, and the collection that brought it. */
@@ -112,19 +113,24 @@ function heading(entry: ListedEntry): { name: string; note?: string; path: strin
 /**
  * Render one entry as the human-readable block. The layout lives here so the
  * plain and the coloured rendering cannot drift apart.
+ *
+ * Both source lines show a GitHub source as `owner/repo`, the way a manifest
+ * names one; a local path or another host's URL is shown as it is.
  */
 function renderEntry(entry: ListedEntry, paint: Painter): string {
   const { name, note, path } = heading(entry);
   const preexisting = note ? ` ${paint(`(${note})`, 'dim')}` : '';
   const agents = entry.agents.length > 0 ? formatAgents(entry.agents) : paint('none', 'dim');
   const source =
-    entry.source === undefined ? paint(UNKNOWN_SOURCE, 'dim') : paint(entry.source, 'green');
+    entry.source === undefined
+      ? paint(UNKNOWN_SOURCE, 'dim')
+      : paint(displaySource(entry.source), 'green');
   return [
     `${paint(name, 'bold')}${preexisting} ${paint(path, 'dim')}`,
     '',
     `${paint('Agents:', 'dim')} ${agents}`,
     '',
-    `${paint('Collection:', 'dim')} ${paint(entry.collectionSource, 'cyan')}`,
+    `${paint('Collection:', 'dim')} ${paint(displaySource(entry.collectionSource), 'cyan')}`,
     '',
     `${paint('Source:', 'dim')} ${source}`,
   ].join('\n');
