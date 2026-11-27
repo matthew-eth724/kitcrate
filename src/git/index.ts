@@ -7,11 +7,11 @@ export interface GitResult {
   readonly code: number;
 }
 
-/** Run a git command and return its result. */
-export function git(args: readonly string[], cwd?: string): Promise<GitResult> {
+/** Run a command and return its result instead of throwing on failure. */
+function run(command: string, args: readonly string[], cwd?: string): Promise<GitResult> {
   return new Promise((resolve) => {
     execFile(
-      'git',
+      command,
       args as string[],
       { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {
@@ -20,6 +20,16 @@ export function git(args: readonly string[], cwd?: string): Promise<GitResult> {
       }
     );
   });
+}
+
+/** Run a git command and return its result. */
+export function git(args: readonly string[], cwd?: string): Promise<GitResult> {
+  return run('git', args, cwd);
+}
+
+/** Run a GitHub CLI command and return its result. */
+export function gh(args: readonly string[], cwd?: string): Promise<GitResult> {
+  return run('gh', args, cwd);
 }
 
 /** Resolve a ref (branch/tag/commit) to a full commit SHA in a remote repo. */
@@ -98,6 +108,16 @@ export async function stagePaths(cwd: string, paths: readonly string[]): Promise
   if (result.code !== 0) {
     throw new Error(`Failed to stage files: ${result.stderr.trim()}`);
   }
+}
+
+/**
+ * Files that are staged but not yet committed: the content the next commit
+ * would sweep in. In a repository with no commits this is every tracked file.
+ */
+export async function listStagedChanges(cwd: string): Promise<string[]> {
+  const result = await git(['diff', '--cached', '--name-only', '-z'], cwd);
+  if (result.code !== 0) return [];
+  return result.stdout.split('\0').filter(Boolean);
 }
 
 /** Remove a path from the index, keeping the file in the working tree. */

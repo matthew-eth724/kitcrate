@@ -53,9 +53,10 @@ Commands:
   ${names}
 
 Options:
-  --yes     Non-interactive use (skip confirmation prompts)
-  --json    Machine-readable output
-  --debug   Include stack traces on errors
+  --yes            Non-interactive use (skip confirmation prompts)
+  --json           Machine-readable output
+  --debug          Include stack traces on errors
+  --allow-secrets  Publish even when the secret scan finds something
 
 Run \`kitcrate <command> --help\` for command-specific help.`);
 }

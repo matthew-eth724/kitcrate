@@ -1,22 +1,28 @@
-import { readdir, stat, readFile, writeFile } from 'fs/promises';
-import { basename, join, relative, sep } from 'path';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { writeFile } from 'fs/promises';
+import { basename, join, resolve } from 'path';
+import { confirm, isCancel, log, multiselect, select, text } from '@clack/prompts';
 import { isCredentialFileName, scanFilesForSecrets, scanForSecrets } from '../core/secrets.js';
 import { ensureEnvIgnoreRules } from '../core/gitignore.js';
 import { type CollectionManifest } from '../core/manifest.js';
 import { computeManifestHash } from '../core/hash.js';
+import { normalizeCollectionName } from '../core/name.js';
+import { discoverSkillsInDirectory, type DiscoveredSkill } from '../skills/index.js';
 import {
   git,
+  gh,
   hasCommits,
   listCommittedFiles,
+  listStagedChanges,
   listTrackedFiles,
   stagePaths,
   unstagePath,
 } from '../git/index.js';
 import type { CommandOptions } from '../core/options.js';
 
-const execFileAsync = promisify(execFile);
+/** Human-readable output, suppressed when the caller asked for JSON. */
+function say(json: boolean, message: string): void {
+  if (!json) console.log(message);
+}
 
 /** Handle the `kitcrate create` command. */
 export async function createCommand(argv: string[], options: CommandOptions): Promise<number> {
@@ -24,87 +30,51 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
   const sourceDir = argv[0] ?? process.cwd();
 
   try {
-    // 1. Scan the folder for directories containing SKILL.md.
-    const skillDirs = await scanSkillDirectories(sourceDir);
-    if (skillDirs.length === 0) {
+    // 1. Discover skills with the `skills` CLI's own discovery.
+    const skipped: string[] = [];
+    const discovered = await discoverSkillsInDirectory(sourceDir, {
+      onWarning: (warning) => skipped.push(warning.message),
+    });
+    if (skipped.length > 0) {
+      console.error(`Skipped ${skipped.length} invalid skill(s):`);
+      for (const warning of skipped) {
+        console.error(`  ${warning}`);
+      }
+    }
+    if (discovered.length === 0) {
       console.error(
         `No skills found in ${sourceDir}. Each skill must be in a directory with SKILL.md.`
       );
       return 1;
     }
 
-    // 2. Validate each skill.
-    const skills: Array<{ dir: string; name: string; description: string }> = [];
-    const errors: string[] = [];
+    const defaultName = deriveDefaultName(sourceDir);
+    const defaultDescription = `Collection of ${discovered.length} skill(s)`;
 
-    for (const skillDir of skillDirs) {
-      try {
-        const skill = await readSkill(skillDir);
-        skills.push(skill);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(`${skillDir}: ${message}`);
-      }
-    }
+    const inputs = await collectInputs({
+      discovered,
+      nonInteractive: yes || json || !isInteractive(),
+      json,
+      defaultName,
+      defaultDescription,
+    });
+    if (!inputs.ok) return inputs.exitCode;
 
-    if (errors.length > 0) {
-      console.error(`Validation errors:`);
-      for (const e of errors) {
-        console.error(`  ✗ ${e}`);
-      }
-      return 1;
-    }
+    const { name, description, visibility, selectedSkills } = inputs;
 
-    // 3. Select skills to include (all by default).
-    const selectedSkills = skills;
-
-    // 4. Prompt for name, description, visibility.
-    const parts = sourceDir.split(sep).filter(Boolean);
-    const defaultName = parts[parts.length - 1] ?? 'collection';
-    const defaultVisibility = 'private';
-
-    let name: string;
-    let description: string;
-    let visibility: 'private' | 'public';
-
-    if (yes || json) {
-      name = defaultName;
-      description = `Collection of ${selectedSkills.length} skill(s)`;
-      visibility = defaultVisibility;
-    } else {
-      name = (await promptInput(`Collection name [${defaultName}]: `)) || defaultName;
-      description =
-        (await promptInput('Description: ')) || `Collection of ${selectedSkills.length} skill(s)`;
-      const visInput =
-        (await promptInput(`Visibility (private/public) [${defaultVisibility}]: `)) ||
-        defaultVisibility;
-      if (visInput !== 'private' && visInput !== 'public') {
-        console.error(`Invalid visibility: "${visInput}". Must be 'private' or 'public'.`);
-        return 1;
-      }
-      visibility = visInput;
-
-      if (visibility === 'public') {
-        const confirm = await promptInput('Publishing publicly. Type "public" to confirm: ');
-        if (confirm !== 'public') {
-          console.error('Publication cancelled: public visibility not confirmed.');
-          return 1;
-        }
-      }
-    }
-
-    // Validate name format.
-    if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(name)) {
-      console.error(
-        `Invalid collection name: "${name}". Must be lowercase, alphanumeric, with hyphens between segments.`
+    // A skill at the source root is the whole directory, so everything in it
+    // is published. Say so rather than let the author discover it later.
+    const rootSkills = selectedSkills.filter((skill) => isRootPath(skill.path));
+    if (rootSkills.length > 0) {
+      say(
+        json,
+        `Note: ${rootSkills.map((skill) => skill.name).join(', ')} lives at the source root, so every file in that directory is published.`
       );
-      return 1;
     }
 
-    // 5. Tell git to ignore env and credential files before anything is staged.
     const gitignoreStatus = await ensureEnvIgnoreRules(sourceDir);
 
-    // 6. Scan the working tree for secrets before anything is written.
+    // 5. Scan the working tree for secrets before anything is written.
     const scanResult = await scanForSecrets(sourceDir);
     const blockingFindings = scanResult.findings.filter(
       (f) => !isCredentialFileName(basename(f.path))
@@ -120,7 +90,7 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       return 1;
     }
 
-    // 7. Write collection.json.
+    // 6. Write collection.json.
     const manifest: CollectionManifest = {
       name,
       version: '0.1.0',
@@ -136,18 +106,32 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
 
     await writeFile(join(sourceDir, 'collection.json'), collectionJson, 'utf8');
 
-    // 8. git init, then stage only what belongs in the collection.
+    // 7. git init, then stage only what belongs in the collection.
     await git(['init'], sourceDir);
 
-    const skillPaths = selectedSkills.map((s) => relative(sourceDir, s.dir));
+    // The commit takes the whole index, so anything the author had already
+    // staged would be published too. Refuse rather than publish their files.
+    const preStaged = await listStagedChanges(sourceDir);
+    if (preStaged.length > 0) {
+      console.error(
+        'This repository already has staged changes. kitcrate create publishes only the collection files:'
+      );
+      for (const path of preStaged) {
+        console.error(`  - ${path}`);
+      }
+      console.error('Unstage them with `git reset`, then run kitcrate create again.');
+      return 1;
+    }
+
+    const skillPaths = selectedSkills.map((skill) => skill.path);
     await stagePaths(sourceDir, ['collection.json', '.gitignore', ...skillPaths]);
 
-    // 9. Publish gate: nothing credential-shaped may reach the remote.
+    // 8. Publish gate: nothing credential-shaped may reach the remote.
     const excluded = await excludeCredentialFiles(sourceDir);
     if (excluded.length > 0) {
-      console.log(`Excluded ${excluded.length} credential file(s) from the publish:`);
+      say(json, `Excluded ${excluded.length} credential file(s) from the publish:`);
       for (const path of excluded) {
-        console.log(`  - ${path}`);
+        say(json, `  - ${path}`);
       }
     }
 
@@ -164,7 +148,7 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       return 1;
     }
 
-    // 10. Refuse to publish a history that already contains credentials.
+    // 9. Refuse to publish a history that already contains credentials.
     if (await hasCommits(sourceDir)) {
       const committed = await listCommittedFiles(sourceDir);
       const leaked = committed.filter((p) => isCredentialFileName(basename(p)));
@@ -182,7 +166,7 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       }
     }
 
-    // 11. Commit and tag v0.1.0.
+    // 10. Commit and tag v0.1.0.
     const commitResult = await git(
       ['commit', '-m', `chore: initial collection ${name} v0.1.0`],
       sourceDir
@@ -193,22 +177,35 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
     }
     await git(['tag', 'v0.1.0'], sourceDir);
 
-    // 12. gh repo create.
+    // 11. gh repo create.
     const visibilityFlag = visibility === 'public' ? '--public' : '--private';
-    try {
-      await execFileAsync(
-        'gh',
-        ['repo', 'create', name, visibilityFlag, '--source', sourceDir, '--push'],
-        { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: sourceDir }
-      );
-    } catch (error) {
-      const stderr =
-        error instanceof Error && 'stderr' in error ? String((error as any).stderr) : String(error);
-      console.error(`Failed to create GitHub repo: ${stderr}`);
+    const ghResult = await gh(
+      ['repo', 'create', name, visibilityFlag, '--source', sourceDir, '--push'],
+      sourceDir
+    );
+    if (ghResult.code !== 0) {
+      const detail = ghResult.stderr.trim() || ghResult.stdout.trim();
+      console.error(`Failed to create GitHub repo: ${detail}`);
       return 1;
     }
 
-    // 13. Print install command.
+    // 12. Report the result.
+    const result = {
+      name,
+      version: manifest.version,
+      description,
+      visibility,
+      skills: selectedSkills.map((skill) => skill.name),
+      manifestHash,
+      gitignore: gitignoreStatus,
+      excluded,
+      published: true,
+    };
+    if (json) {
+      console.log(JSON.stringify(result, null, 2));
+      return 0;
+    }
+
     console.log(`\nCollection "${name}" published (v0.1.0).`);
     console.log(`  manifestHash: ${manifestHash}`);
     console.log(`  .gitignore: ${gitignoreStatus}`);
@@ -226,21 +223,6 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
   }
 }
 
-/** Directories to skip during skill discovery. */
-const SKIP_DIRECTORIES = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-  'coverage',
-  '.turbo',
-]);
-
-/** Maximum directory depth to search for SKILL.md (matches skills CLI convention). */
-const MAX_SKILL_DEPTH = 4;
-
-/** Recursively scan a directory tree for folders containing SKILL.md. */
 /**
  * Remove credential files from the git index so they stay on disk but are never
  * pushed. Returns the paths that were excluded.
@@ -254,81 +236,149 @@ async function excludeCredentialFiles(sourceDir: string): Promise<string[]> {
   return credentialFiles;
 }
 
-async function scanSkillDirectories(root: string): Promise<string[]> {
-  const results: string[] = [];
-  await walkDirectory(root, root, 0, results);
-  return results.sort();
+/** What the user chose for the collection being created. */
+interface CollectionInputs {
+  readonly name: string;
+  readonly description: string;
+  readonly visibility: 'private' | 'public';
+  readonly selectedSkills: readonly DiscoveredSkill[];
 }
 
-async function walkDirectory(
-  root: string,
-  dir: string,
-  depth: number,
-  results: string[]
-): Promise<void> {
-  if (depth > MAX_SKILL_DEPTH) return;
+/** Either the collected inputs or an exit code, so a cancel or refusal cannot be mistaken for success. */
+type CollectedInputs =
+  ({ readonly ok: true } & CollectionInputs) | { readonly ok: false; readonly exitCode: number };
 
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
+/** A prompt was cancelled: clack reports it with a distinct symbol rather than by throwing. */
+const MODE_EXIT_CANCELLED = 130;
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (SKIP_DIRECTORIES.has(entry.name)) continue;
+/** Prompting needs a real terminal on both ends; piping either one makes clack unusable. */
+function isInteractive(): boolean {
+  return process.stdin.isTTY === true && process.stdout.isTTY === true;
+}
 
-    const fullPath = join(dir, entry.name);
-    const skillPath = join(fullPath, 'SKILL.md');
+/** Whether a discovered skill sits at the root of the scanned directory. */
+function isRootPath(path: string): boolean {
+  return path === '' || path === '.' || path === './';
+}
 
-    // If this directory contains SKILL.md, it's a skill folder.
-    try {
-      await stat(skillPath);
-      results.push(fullPath);
-      // Don't recurse into a skill folder — its contents are skill files, not more skills.
-      continue;
-    } catch {
-      // Not a skill folder; keep searching deeper.
+/**
+ * Best guess at the collection name from the source directory's own name,
+ * already in the convention. Falls back to `collection` when the folder name
+ * yields nothing usable (`.` or `/`, say, or a path whose last segment an
+ * interactive shell cannot see).
+ */
+function deriveDefaultName(sourceDir: string): string {
+  const resolved = resolve(sourceDir);
+  const candidate = normalizeCollectionName(basename(resolved));
+  return candidate.ok ? candidate.name : 'collection';
+}
+
+/**
+ * Gather the name, description, visibility, and skill selection.
+ * `--yes`, `--json`, and non-TTY runs take the defaults and every skill.
+ */
+async function collectInputs(context: {
+  readonly discovered: readonly DiscoveredSkill[];
+  readonly nonInteractive: boolean;
+  readonly json: boolean;
+  readonly defaultName: string;
+  readonly defaultDescription: string;
+}): Promise<CollectedInputs> {
+  const { discovered, nonInteractive, json, defaultName, defaultDescription } = context;
+
+  if (nonInteractive) {
+    say(json, 'Non-interactive: no prompts, every discovered skill was selected.');
+    const normalized = normalizeCollectionName(defaultName);
+    if (!normalized.ok) {
+      console.error(
+        `${normalized.reason} Rename the directory or pass an explicit collection name.`
+      );
+      return { ok: false, exitCode: 1 };
     }
+    return {
+      ok: true,
+      name: normalized.name,
+      description: defaultDescription,
+      visibility: 'private',
+      selectedSkills: discovered,
+    };
+  }
 
-    // Recurse to find nested skills (e.g. .agents/skills/<name>/SKILL.md).
-    await walkDirectory(root, fullPath, depth + 1, results);
-  }
-}
-
-async function readSkill(dir: string): Promise<{ dir: string; name: string; description: string }> {
-  const content = await readFile(join(dir, 'SKILL.md'), 'utf8');
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!frontmatterMatch) {
-    throw new Error('SKILL.md missing YAML frontmatter');
-  }
-  const frontmatter = frontmatterMatch[1];
-  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-  const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-  if (!nameMatch) {
-    throw new Error('SKILL.md missing "name" in frontmatter');
-  }
-  if (!descMatch) {
-    throw new Error('SKILL.md missing "description" in frontmatter');
-  }
-  return {
-    dir,
-    name: nameMatch[1].trim(),
-    description: descMatch[1].trim(),
-  };
-}
-
-async function promptInput(message: string): Promise<string> {
-  const readline = await import('readline');
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
+  const nameAnswer = await text({
+    message: 'Collection name',
+    placeholder: defaultName,
+    validate: (value) => {
+      const candidate = value === undefined || value.trim() === '' ? defaultName : value;
+      const result = normalizeCollectionName(candidate);
+      return result.ok ? undefined : result.reason;
+    },
   });
-  return new Promise((resolve) => {
-    rl.question(message, (answer) => {
-      rl.close();
-      resolve(answer.trim());
+  if (isCancel(nameAnswer)) return cancelled();
+
+  const typedName = nameAnswer.trim() === '' ? defaultName : nameAnswer;
+  const normalizedName = normalizeCollectionName(typedName);
+  if (!normalizedName.ok) {
+    console.error(normalizedName.reason);
+    return { ok: false, exitCode: 1 };
+  }
+  if (normalizedName.changed) {
+    log.info(`Collection name normalized to "${normalizedName.name}".`);
+  }
+
+  const descriptionAnswer = await text({
+    message: 'Description',
+    placeholder: defaultDescription,
+  });
+  if (isCancel(descriptionAnswer)) return cancelled();
+  const description = descriptionAnswer.trim() === '' ? defaultDescription : descriptionAnswer;
+
+  const visibilityAnswer = await select({
+    message: 'Visibility',
+    options: [
+      { value: 'private', label: 'private', hint: 'only you can see the repo' },
+      { value: 'public', label: 'public', hint: 'anyone can install the collection' },
+    ],
+    initialValue: 'private',
+  });
+  if (isCancel(visibilityAnswer)) return cancelled();
+  const visibility = visibilityAnswer === 'public' ? 'public' : 'private';
+
+  if (visibility === 'public') {
+    const confirmed = await confirm({
+      message: `Publish "${normalizedName.name}" as a PUBLIC GitHub repository? Anyone will be able to read it.`,
+      initialValue: false,
     });
+    if (isCancel(confirmed)) return cancelled();
+    if (!confirmed) {
+      console.error('Publication cancelled: public visibility was not confirmed.');
+      return { ok: false, exitCode: 1 };
+    }
+  }
+
+  const selection = await multiselect({
+    message: 'Select skills to include',
+    options: discovered.map((skill) => ({
+      value: skill.name,
+      label: skill.name,
+      hint: skill.description,
+    })),
+    initialValues: discovered.map((skill) => skill.name),
+    required: false,
   });
+  if (isCancel(selection)) return cancelled();
+
+  const chosen = new Set(selection);
+  const selectedSkills = discovered.filter((skill) => chosen.has(skill.name));
+  if (selectedSkills.length === 0) {
+    console.error('At least one skill must be selected: a collection cannot be empty.');
+    return { ok: false, exitCode: 1 };
+  }
+
+  return { ok: true, name: normalizedName.name, description, visibility, selectedSkills };
+}
+
+/** Report a cancelled prompt and signal the caller to exit with the conventional code. */
+function cancelled(): CollectedInputs {
+  console.log('Cancelled.');
+  return { ok: false, exitCode: MODE_EXIT_CANCELLED };
 }
