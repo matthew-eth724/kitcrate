@@ -1,5 +1,6 @@
 import {
   diagnostics,
+  getSupportedAgents,
   installSkills,
   listSkills,
   removeSkills,
@@ -74,7 +75,12 @@ export interface ListedSkill {
   readonly name: string;
   readonly description: string;
   readonly scope: InstallScope;
+  /** Installed directory of the skill. */
+  readonly path?: string;
+  /** Agent ids the skill is installed for, e.g. `claude-code`. */
   readonly agents: readonly string[];
+  /** The same agents by display name, e.g. `Claude Code`, in the same order. */
+  readonly agentNames: readonly string[];
   readonly source?: string;
 }
 
@@ -240,9 +246,20 @@ export async function listInstalledSkills(
     name: s.name,
     description: s.description,
     scope: s.scope,
+    ...(s.path !== undefined && { path: s.path }),
     agents: s.agents,
+    agentNames: s.agents.map(agentDisplayName),
     ...(s.source !== undefined && { source: s.source }),
   }));
+}
+
+/**
+ * Display name for an agent id. The `skills` package owns the mapping, and this
+ * module is the only place allowed to reach into it; an unknown id (a newer
+ * `skills` than this mapping knows) falls back to the id rather than blank.
+ */
+export function agentDisplayName(id: string): string {
+  return getSupportedAgents().find((agent) => agent.id === id)?.name ?? id;
 }
 
 /** Remove installed skills by name. */

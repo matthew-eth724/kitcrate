@@ -224,16 +224,42 @@ describe('install scope', () => {
     expect(await skillLives(join(home, '.agents', 'skills'))).toBe(false);
   });
 
-  it('reports each collection scope in list, as a line and in JSON', async () => {
+  it('reports each collection scope in list, as collection metadata and in JSON', async () => {
     await writeLockfileFor(project, 'global');
 
     const human = await capture(project, () => listCommand([], options()));
     expect(human.result).toBe(0);
-    expect(human.log).toContain('scope: global');
+    // The human output names the skill and the collection, not the scope line.
+    expect(human.log).toContain('alpha');
+    expect(human.log).toContain(`Collection: ${collection}`);
+    expect(human.log).not.toContain('scope:');
 
     const machine = await capture(project, () => listCommand([], options({ json: true })));
     const listed = JSON.parse(machine.log) as { collections: Array<{ scope: string }> };
     expect(listed.collections[0]?.scope).toBe('global');
+  });
+
+  it('lists each skill once, with the agents it is installed for, as JSON', async () => {
+    await writeLockfileFor(project, 'global');
+    await run(project, () => installCommand([], options()));
+
+    const machine = await capture(project, () => listCommand([], options({ json: true })));
+    const listed = JSON.parse(machine.log) as {
+      skills: Array<{
+        name: string;
+        path: string;
+        agents: Array<{ id: string; name: string }>;
+        collection: string;
+      }>;
+    };
+
+    expect(listed.skills).toHaveLength(1);
+    expect(listed.skills[0]?.name).toBe('alpha');
+    expect(listed.skills[0]?.collection).toBe('probe-collection');
+    expect(listed.skills[0]?.path.endsWith(join('alpha'))).toBe(true);
+    expect(listed.skills[0]?.agents.length).toBeGreaterThan(0);
+    // Valid JSON, so no terminal escape sequence reached the output.
+    expect(machine.log).not.toMatch(/\u001b|\x1b/);
   });
 
   it('restores into the locked scope even when the skill already exists in the other one', async () => {
