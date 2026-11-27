@@ -1,7 +1,6 @@
 import {
   diagnostics,
   installSkills,
-  isDiagnostic,
   listSkills,
   removeSkills,
   resolveSource,
@@ -22,6 +21,14 @@ export interface ResolvedSkill {
   readonly description: string;
   /** Path to the skill's SKILL.md within the source, `/`-separated. */
   readonly path?: string;
+}
+
+/** A skill discovered inside a local directory. */
+export interface DiscoveredSkill {
+  readonly name: string;
+  readonly description: string;
+  /** Path to the skill folder relative to the scanned root, `/`-separated. */
+  readonly path: string;
 }
 
 /** A resolved collection source, ready to install from. */
@@ -133,6 +140,42 @@ export async function resolveCollection(
   }
 }
 
+/**
+ * Discover skills inside a local directory using the `skills` CLI's own
+ * discovery, so kitcrate follows the same conventional folders
+ * (`.agents/skills/`, `skills/`, `.claude/skills/`, ...) instead of its own walk.
+ * A source with no valid skills yields an empty array, not a diagnostic.
+ */
+export async function discoverSkillsInDirectory(
+  root: string,
+  options: AdapterOptions = {}
+): Promise<readonly DiscoveredSkill[]> {
+  let handle: SkillSource | undefined;
+  try {
+    handle = await resolveSource(root, {
+      cwd: options.cwd,
+      signal: options.signal,
+      onProgress: options.onProgress,
+      onWarning: options.onWarning,
+    } as SkillsResolveOptions);
+  } catch (error) {
+    if (isSkillsDiagnostic(error) && error.code === 'SKILLS_NO_VALID_SKILLS') {
+      return [];
+    }
+    throw error;
+  }
+
+  try {
+    return handle.skills.flatMap((skill) =>
+      skill.path === undefined
+        ? []
+        : [{ name: skill.name, description: skill.description, path: skill.path }]
+    );
+  } finally {
+    await handle.dispose();
+  }
+}
+
 /** Install member skills from a collection source string. */
 export async function installCollectionSkills(
   source: string,
@@ -220,9 +263,14 @@ export async function removeCollectionSkills(
   };
 }
 
-/** Type guard: check whether an error is a skills diagnostic. */
+/**
+ * Type guard: check whether an error is any diagnostics-catalog error thrown by
+ * `skills`. The exported `isDiagnostic` helper is the deprecated variant whose
+ * guard only narrows when codes are passed explicitly, so it always returns
+ * false for a bare check; the catalog predicate is the correct one.
+ */
 export function isSkillsDiagnostic(error: unknown): error is Diagnostic<unknown> {
-  return isDiagnostic(error);
+  return diagnostics.is(error);
 }
 
 export { diagnostics };
