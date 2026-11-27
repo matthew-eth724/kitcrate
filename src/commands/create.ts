@@ -1,7 +1,7 @@
 import { writeFile } from 'fs/promises';
 import { basename, join, resolve } from 'path';
 import { confirm, isCancel, log, select, text } from '@clack/prompts';
-import { isCredentialFileName, scanFilesForSecrets, scanForSecrets } from '../core/secrets.js';
+import { isCredentialFileName, scanFilesForSecrets } from '../core/secrets.js';
 import { ensureEnvIgnoreRules } from '../core/gitignore.js';
 import { type CollectionManifest } from '../core/manifest.js';
 import { computeManifestHash } from '../core/hash.js';
@@ -27,7 +27,7 @@ function say(json: boolean, message: string): void {
 
 /** Handle the `kitcrate create` command. */
 export async function createCommand(argv: string[], options: CommandOptions): Promise<number> {
-  const { yes, json, allowSecrets } = options;
+  const { yes, json } = options;
   const sourceDir = argv[0] ?? process.cwd();
 
   try {
@@ -75,23 +75,7 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
 
     const gitignoreStatus = await ensureEnvIgnoreRules(sourceDir);
 
-    // 5. Scan the working tree for secrets before anything is written.
-    const scanResult = await scanForSecrets(sourceDir);
-    const blockingFindings = scanResult.findings.filter(
-      (f) => !isCredentialFileName(basename(f.path))
-    );
-    if (blockingFindings.length > 0 && !allowSecrets) {
-      console.error(
-        `Secret scan blocked publish. Found ${blockingFindings.length} potential secret(s):`
-      );
-      for (const f of blockingFindings) {
-        console.error(`  ✗ ${f.path}: ${f.message}`);
-      }
-      console.error('Remove the secrets, or pass --allow-secrets to publish anyway.');
-      return 1;
-    }
-
-    // 6. Write collection.json.
+    // 5. Write collection.json.
     const manifest: CollectionManifest = {
       name,
       version: '0.1.0',
@@ -138,32 +122,28 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
 
     const tracked = await listTrackedFiles(sourceDir);
     const contentFindings = await scanFilesForSecrets(sourceDir, tracked);
-    if (!contentFindings.clean && !allowSecrets) {
+    if (!contentFindings.clean) {
       console.error(
-        `Publish blocked: ${contentFindings.findings.length} secret(s) in files that would be pushed:`
+        `Secret scan found ${contentFindings.findings.length} potential secret(s) in files that would be pushed:`
       );
       for (const f of contentFindings.findings) {
-        console.error(`  ✗ ${f.path}: ${f.message}`);
+        console.error(`  ! ${f.path}: ${f.message}`);
       }
-      console.error('Remove the secrets, or pass --allow-secrets to publish anyway.');
-      return 1;
     }
 
-    // 9. Refuse to publish a history that already contains credentials.
+    // 8. Warn when the history already holds credentials. Publishing is not
+    // blocked, but the author should know those commits go to the remote too.
     if (await hasCommits(sourceDir)) {
       const committed = await listCommittedFiles(sourceDir);
       const leaked = committed.filter((p) => isCredentialFileName(basename(p)));
       if (leaked.length > 0) {
         console.error(
-          `Publish blocked: this repository's history already contains credential file(s):`
+          `Warning: this repository's history already contains ${leaked.length} credential file(s):`
         );
         for (const p of leaked) {
-          console.error(`  ✗ ${p}`);
+          console.error(`  ! ${p}`);
         }
-        console.error(
-          'Publishing would push them. Publish from a clean directory, or purge them from history first.'
-        );
-        return 1;
+        console.error('Publishing will push them along with the new commit.');
       }
     }
 

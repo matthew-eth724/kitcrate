@@ -132,6 +132,16 @@
       "evidence": "src/skills/index.ts exports discoverSkillsInDirectory built on resolveSource; the hand-rolled scanSkillDirectories/walkDirectory/readSkill are gone from create.ts; the adapter's isSkillsDiagnostic guard was fixed (the upstream isDiagnostic(error) with no codes always returned false) so an empty directory yields [] instead of escaping as a diagnostic; 4 discovery tests in test/create.test.ts"
     },
     {
+      "id": "feat-015",
+      "name": "Secrets never block a publish",
+      "description": "Secret findings are reported but never stop a publish; credential files stay excluded from the commit",
+      "dependencies": [
+        "feat-009"
+      ],
+      "status": "done",
+      "evidence": "src/commands/create.ts reports secret-pattern findings in the files that would be pushed and publishes anyway; credential files are still unstaged from the commit so they are never published; a credential file already in git history now produces a warning instead of a block; --allow-secrets is accepted as a no-op so older scripts keep working; 3 new tests in test/create.test.ts cover the publish-with-a-secret, the credential exclusion, and the history warning"
+    },
+    {
       "id": "feat-014",
       "name": "Picker presentation",
       "description": "Skill list shows names only; each row shows an empty box that becomes a green tick when ticked",

@@ -26,6 +26,7 @@
 - [x] feat-012 Interactive skill picker: `@clack/prompts` multiselect in `create`, space toggles and Enter finalizes, non-interactive runs select every skill
 - [x] feat-013 skills CLI discovery reuse: hand-rolled scan and frontmatter parser replaced by `discoverSkillsInDirectory`; broken `isSkillsDiagnostic` guard fixed
 - [x] feat-014 Picker presentation: skill list shows names only, every box starts empty, and ticking one turns it into a green tick; the header shows the running count
+- [x] feat-015 Secrets never block a publish: findings are reported, credential files stay excluded, the history check warns instead of blocking, and `--allow-secrets` became a no-op
 
 ### What's In Progress
 
@@ -50,6 +51,9 @@
 - The `create` commit takes the whole git index, so the command now refuses to publish when the repository already has staged changes rather than silently publishing the author's files.
 - `gh` now goes through a `gh()` wrapper in `src/git/index.ts`, matching AGENTS.md's "thin wrappers around git and gh".
 - The picker draws itself. clack hardcodes its checkbox symbols, so `src/commands/pick-skills.ts` builds on `@clack/core`'s `MultiSelectPrompt` for the keyboard handling and renders the list with an empty box and a green tick.
+- Secret findings never stop a publish. The scan reports what it finds and the publish goes ahead. Only credential files are kept out of the commit, because exclusion prevents them from being published rather than stopping the publish. `--allow-secrets` is still accepted so older scripts keep working, but it does nothing.
+- The early whole-tree secret scan was dropped from the publish flow. The tracked-file scan covers exactly the files that would be pushed, so the tree scan only produced duplicate warnings. `scanForSecrets` stays in `core/secrets.ts` as a tested utility.
+- `pnpm typecheck` now covers the test files too, via `tsconfig.test.json`. The main `tsconfig.json` excludes `test/` so the build output stays under `dist/`.
 - No skill starts ticked. The author picks what goes into the collection; the non-interactive `--yes` and `--json` paths still take every skill, since "no questions asked" means no filtering.
 
 ## Files Modified This Session

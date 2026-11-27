@@ -122,7 +122,6 @@ describe('createCommand', () => {
       yes: true,
       json: true,
       debug: false,
-      allowSecrets: false,
     });
     return { code, stdout: lines.join('\n') };
   }
@@ -171,6 +170,35 @@ describe('createCommand', () => {
     expect(tracked.stdout).not.toContain('.env');
   });
 
+  it('publishes even when a file that would be pushed contains a secret pattern', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await writeFile(
+      join(root, '.agents', 'skills', 'alpha', 'config.txt'),
+      `token = ghp_${'a'.repeat(40)}\n`,
+      'utf8'
+    );
+
+    const { code } = await runCreate(root);
+
+    expect(code).toBe(0);
+    const tracked = await git(['ls-files', '-z'], root);
+    expect(tracked.stdout).toContain('config.txt');
+  });
+
+  it('warns but still publishes when the history already holds a credential file', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await git(['init'], root);
+    await writeFile(join(root, '.env'), 'TOKEN=secret\n', 'utf8');
+    await git(['add', '--', '.env'], root);
+    await git(['commit', '-m', 'a commit that should not have existed'], root);
+
+    const { code } = await runCreate(root);
+
+    expect(code).toBe(0);
+    const log = await git(['log', '--oneline'], root);
+    expect(log.stdout).toContain('a commit that should not have existed');
+  });
+
   it('refuses to publish when the repository already has staged changes', async () => {
     await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
     await git(['init'], root);
@@ -203,7 +231,6 @@ describe('createCommand', () => {
       yes: true,
       json: true,
       debug: false,
-      allowSecrets: false,
     });
 
     expect(code).toBe(0);

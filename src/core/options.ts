@@ -6,6 +6,4 @@ export interface CommandOptions {
   readonly json: boolean;
   /** Include stack traces on errors. */
   readonly debug: boolean;
-  /** Publish despite secret-pattern findings inside skill content. */
-  readonly allowSecrets: boolean;
 }

@@ -99,13 +99,12 @@ kitcrate only removes skills it installed itself.
 3. Prompt for name, description, visibility (default **private**; confirm explicitly if public).
 4. Multi-select skills to include: space toggles, Enter finalizes. The list shows skill names only, each starting as an empty box that becomes a green tick when ticked. Nothing is pre-ticked; the author chooses what goes in.
 5. Write a `.gitignore` that ignores `.env` and `.env.*` but keeps `!.env.example`.
-6. Scan selected skills for secrets before anything is written.
-7. Write `collection.json`. Default mode is references; offer "copy skills into the repo" as an option.
-8. `git init`, then stage only `collection.json`, `.gitignore`, and the selected skill folders. Never `git add .`.
-9. Publish gate: unstage credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) so they stay on disk but are never pushed; scan the contents of every tracked file; refuse to publish when the repository's existing history already contains a credential file; refuse when the repository already has staged changes, because the commit takes the whole index.
-10. Commit, tag `v0.1.0`.
-11. `gh repo create <name> --<visibility> --source . --push`.
-12. Print the install command: `kitcrate add github:<user>/<name>`.
+6. Write `collection.json`. Default mode is references; offer "copy skills into the repo" as an option.
+7. `git init`, then stage only `collection.json`, `.gitignore`, and the selected skill folders. Never `git add .`.
+8. Publish gate: unstage credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) so they stay on disk but are never pushed; scan the contents of every tracked file; warn when the repository's existing history already contains a credential file; refuse when the repository already has staged changes, because the commit takes the whole index.
+9. Commit, tag `v0.1.0`.
+10. `gh repo create <name> --<visibility> --source . --push`.
+11. Print the install command: `kitcrate add github:<user>/<name>`.
 
 ### Collection name convention
 
@@ -119,7 +118,8 @@ kitcrate only removes skills it installed itself.
 
 - Never store or log tokens. Delegate auth to `gh` (check `gh auth status`); fall back to plain `git` with existing credentials.
 - Never execute scripts from a skill during install. Show a trust prompt listing any scripts a collection's skills contain.
-- Secret scan before publish: credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) are excluded from the commit, never published; private keys and common API key patterns inside files that would be pushed block the publish unless `--allow-secrets` is passed. `.env.example` is publishable.
+- Credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) are excluded from the commit, never published. `.env.example` is publishable.
+- Secret findings never block a publish. The scan reports private keys and common API key patterns in the files that would be pushed, and the publish goes ahead. Only credential files are kept out of the commit, because exclusion prevents them from being published rather than stopping the publish.
 - Treat fetched manifests as untrusted. Validate with zod; reject path traversal and entries that escape the repo.
 - Verify `manifestHash` on install and fail loudly on mismatch.
 - Never publish publicly without explicit confirmation.
@@ -152,7 +152,7 @@ Isolate the `skills` dependency in `src/skills/`. If its API changes, only that 
 - Strict TypeScript, no `any`. Validate every file read from disk or network with zod.
 - Commands are thin; logic lives in `core/` so it is testable without a TTY.
 - Every command supports `--yes` for non-interactive use and `--json` for machine-readable output.
-- `kitcrate create` also supports `--allow-secrets` to publish despite secret-pattern findings inside skill content.
+- `kitcrate create` accepts `--allow-secrets` for compatibility with older scripts, but it does nothing: secret findings never block a publish.
 - Errors: actionable message, nonzero exit code, no stack traces unless `--debug`.
 - JSON files: 2-space indent, sorted keys, trailing newline, so diffs stay clean.
 - Prettier for formatting, matching `skills`.

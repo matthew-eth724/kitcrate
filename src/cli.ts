@@ -53,10 +53,9 @@ Commands:
   ${names}
 
 Options:
-  --yes            Non-interactive use (skip confirmation prompts)
-  --json           Machine-readable output
-  --debug          Include stack traces on errors
-  --allow-secrets  Publish even when the secret scan finds something
+  --yes     Non-interactive use (skip confirmation prompts)
+  --json    Machine-readable output
+  --debug   Include stack traces on errors
 
 Run \`kitcrate <command> --help\` for command-specific help.`);
 }
@@ -67,20 +66,22 @@ function parseFlags(argv: string[]): CommandOptions & { args: string[] } {
   let yes = false;
   let json = false;
   let debug = false;
-  let allowSecrets = false;
   for (const arg of argv) {
     if (arg === '--yes') yes = true;
     else if (arg === '--json') json = true;
     else if (arg === '--debug') debug = true;
-    else if (arg === '--allow-secrets') allowSecrets = true;
+    // Secret findings never block a publish, so this flag has nothing left to
+    // do. It is still accepted so scripts written against the old behaviour
+    // keep working.
+    else if (arg === '--allow-secrets') continue;
     else args.push(arg);
   }
-  return { yes, json, debug, allowSecrets, args };
+  return { yes, json, debug, args };
 }
 
 /** Main entry point. */
 export async function main(argv: string[]): Promise<number> {
-  const { yes, json, debug, allowSecrets, args } = parseFlags(argv);
+  const { yes, json, debug, args } = parseFlags(argv);
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     printUsage();
@@ -96,7 +97,7 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   try {
-    return await command.handler(commandArgs, { yes, json, debug, allowSecrets });
+    return await command.handler(commandArgs, { yes, json, debug });
   } catch (error) {
     if (debug) {
       console.error(error);
