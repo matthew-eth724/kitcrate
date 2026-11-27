@@ -65,7 +65,10 @@ export async function removeCommand(argv: string[], options: CommandOptions): Pr
     const leftInPlace: Array<{ skill: string; reason: string }> = [];
 
     if (skillsToRemove.length > 0) {
-      const result = await removeCollectionSkills(skillsToRemove, { cwd });
+      const result = await removeCollectionSkills(skillsToRemove, {
+        cwd,
+        scope: entry.scope,
+      });
       removed.push(...result.removed);
       for (const failure of result.failed) {
         leftInPlace.push({ skill: failure.name, reason: failure.message });

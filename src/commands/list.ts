@@ -28,6 +28,7 @@ export async function listCommand(_argv: string[], options: CommandOptions): Pro
       return {
         name,
         source: entry.source,
+        scope: entry.scope,
         ref: entry.ref,
         commit: entry.commit,
         manifestHash: entry.manifestHash,
@@ -48,6 +49,7 @@ export async function listCommand(_argv: string[], options: CommandOptions): Pro
       for (const c of results) {
         console.log(`Collection: ${c.name}`);
         console.log(`  source: ${c.source}`);
+        console.log(`  scope: ${c.scope}`);
         console.log(`  ref: ${c.ref}`);
         console.log(`  commit: ${c.commit.slice(0, 7)}`);
         console.log(`  manifestHash: ${c.manifestHash}`);

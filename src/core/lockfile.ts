@@ -15,8 +15,11 @@ export const CollectionLockEntrySchema = z.object({
   source: z.string().min(1),
   /** Ref used to resolve the collection (branch/tag/commit). */
   ref: z.string().min(1),
-  /** Pinned commit SHA of the resolved collection.json. */
-  commit: z.string().min(1),
+  /**
+   * Pinned commit SHA of the resolved collection.json. Empty for a local source
+   * that is not a git repository, so there is no commit to pin.
+   */
+  commit: z.string(),
   /** Hash of the collection.json that was resolved. */
   manifestHash: z.string().min(1),
   /** Optional filter: only these member skills were installed. */
@@ -25,6 +28,8 @@ export const CollectionLockEntrySchema = z.object({
   skills: z.array(z.string().min(1)),
   /** Member skills that were already installed when the collection was added. */
   preexisting: z.array(z.string().min(1)).default([]),
+  /** Where the collection's skills are installed. */
+  scope: z.enum(['project', 'global']).default('project'),
 });
 
 export type CollectionLockEntry = z.infer<typeof CollectionLockEntrySchema>;
@@ -123,6 +128,7 @@ function sortLockfile(lockfile: Lockfile): Lockfile {
       ...(entry.only && { only: [...entry.only].sort() }),
       skills: [...entry.skills].sort(),
       preexisting: [...entry.preexisting].sort(),
+      scope: entry.scope,
     };
   }
   return { version: lockfile.version, collections: sortedCollections };

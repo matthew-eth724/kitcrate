@@ -53,19 +53,22 @@ export async function installCommand(_argv: string[], options: CommandOptions): 
         return 1;
       }
 
-      // Install any member skills not already installed.
+      // Install any member skills not already installed in the collection's scope.
       const installedSkills = await listInstalledSkills({ cwd });
-      const installedNames = new Set(installedSkills.map((s) => s.name));
+      const installedNames = new Set(
+        installedSkills.filter((s) => s.scope === entry.scope).map((s) => s.name)
+      );
       const skillsToInstall = entry.skills.filter((s) => !installedNames.has(s));
 
       let skillsRestored = 0;
       if (skillsToInstall.length > 0) {
         const result = await installCollectionSkills(entry.source, {
           skills: skillsToInstall,
-          scope: 'project',
+          scope: entry.scope,
           mode: 'auto',
         });
-        skillsRestored = result.installed.length;
+        // The `skills` API reports one entry per agent, so count distinct names.
+        skillsRestored = new Set(result.installed.map((member) => member.name)).size;
         if (result.failed.length > 0) {
           for (const failure of result.failed) {
             console.error(`Failed to install skill "${failure.name}": ${failure.message}`);

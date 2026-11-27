@@ -12,6 +12,7 @@ import {
   type SkillSource,
   type SourceType,
 } from 'skills';
+import type { InstallScope } from '../core/scope.js';
 
 /** A skill discovered in a collection source. */
 export interface ResolvedSkill {
@@ -51,7 +52,7 @@ export interface ResolvedCollection {
 export interface InstalledMember {
   readonly name: string;
   readonly agent: string;
-  readonly scope: 'project' | 'global';
+  readonly scope: InstallScope;
   readonly mode: 'symlink' | 'copy';
   readonly path: string;
 }
@@ -72,7 +73,7 @@ export interface InstallCollectionResult {
 export interface ListedSkill {
   readonly name: string;
   readonly description: string;
-  readonly scope: 'project' | 'global';
+  readonly scope: InstallScope;
   readonly agents: readonly string[];
   readonly source?: string;
 }
@@ -102,9 +103,15 @@ export interface InstallCollectionOptions extends AdapterOptions {
   /** Agents to install into. Defaults to detected agents. */
   readonly agents?: readonly string[];
   /** Install scope. Defaults to 'project'. */
-  readonly scope?: 'project' | 'global';
+  readonly scope?: InstallScope;
   /** Install mode. Defaults to 'auto'. */
   readonly mode?: 'auto' | 'symlink' | 'copy';
+}
+
+/** Options for removing collection member skills. */
+export interface RemoveCollectionOptions extends AdapterOptions {
+  /** Remove scope. Defaults to 'project'. */
+  readonly scope?: InstallScope;
 }
 
 /** Resolve a collection source and discover its skills without installing. */
@@ -241,13 +248,13 @@ export async function listInstalledSkills(
 /** Remove installed skills by name. */
 export async function removeCollectionSkills(
   names: readonly string[],
-  options: AdapterOptions = {}
+  options: RemoveCollectionOptions = {}
 ): Promise<RemoveCollectionResult> {
   const result = await removeSkills(names, {
     cwd: options.cwd,
     signal: options.signal,
     onWarning: options.onWarning,
-    scope: 'project',
+    scope: options.scope ?? 'project',
     lockfile: true,
   } as SkillsRemoveOptions);
 

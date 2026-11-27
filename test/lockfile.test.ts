@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, writeFile, rm } from 'fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -20,6 +20,7 @@ const baseLockfile: Lockfile = {
       manifestHash: 'sha256-ab12',
       skills: ['sqli-checks', 'xss-review'],
       preexisting: ['xss-review'],
+      scope: 'project',
     },
   },
 };
@@ -65,6 +66,7 @@ describe('lockfile', () => {
           manifestHash: 'd',
           skills: [],
           preexisting: [],
+          scope: 'project',
         },
         'aaa-collection': {
           source: 'a',
@@ -73,6 +75,7 @@ describe('lockfile', () => {
           manifestHash: 'd',
           skills: [],
           preexisting: [],
+          scope: 'project',
         },
       },
     };
@@ -104,6 +107,37 @@ describe('lockfile', () => {
     await setupDir();
     await writeFile(join(dir, 'kitcrate-lock.json'), '{ not valid json', 'utf8');
     await expect(readLockfile(dir)).rejects.toThrow(/Invalid JSON/);
+  });
+
+  it('reads an entry written before scope existed as project scope', async () => {
+    await setupDir();
+    const { scope: _scope, ...oldEntry } = baseLockfile.collections['web-security']!;
+    await writeFile(
+      join(dir, 'kitcrate-lock.json'),
+      JSON.stringify({ version: LOCKFILE_VERSION, collections: { 'web-security': oldEntry } }),
+      'utf8'
+    );
+
+    const readBack = await readLockfile(dir);
+
+    expect(readBack.collections['web-security'].scope).toBe('project');
+  });
+
+  it('round-trips a global-scope entry through write and read', async () => {
+    await setupDir();
+    const globalLockfile: Lockfile = {
+      version: LOCKFILE_VERSION,
+      collections: {
+        'web-security': { ...baseLockfile.collections['web-security']!, scope: 'global' },
+      },
+    };
+
+    await writeLockfile(dir, globalLockfile);
+    const readBack = await readLockfile(dir);
+
+    expect(readBack.collections['web-security'].scope).toBe('global');
+    const content = await readFile(join(dir, 'kitcrate-lock.json'), 'utf8');
+    expect(JSON.parse(content).collections['web-security'].scope).toBe('global');
   });
 
   it('computeLockfileHash is deterministic', async () => {

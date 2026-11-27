@@ -105,7 +105,10 @@ export async function updateCommand(argv: string[], options: CommandOptions): Pr
           }
           continue;
         }
-        const removeResult = await removeCollectionSkills([skill], { cwd });
+        const removeResult = await removeCollectionSkills([skill], {
+          cwd,
+          scope: entry.scope,
+        });
         if (removeResult.failed.length > 0) {
           console.error(`Failed to remove skill "${skill}": ${removeResult.failed[0].message}`);
           return 1;
@@ -116,7 +119,7 @@ export async function updateCommand(argv: string[], options: CommandOptions): Pr
       if (skillsAdded.length > 0) {
         const result = await installCollectionSkills(entry.source, {
           skills: skillsAdded,
-          scope: 'project',
+          scope: entry.scope,
           mode: 'auto',
         });
         if (result.failed.length > 0) {
@@ -135,6 +138,7 @@ export async function updateCommand(argv: string[], options: CommandOptions): Pr
         manifestHash: resolved.manifestHash,
         skills: [...newSkills],
         preexisting: entry.preexisting,
+        scope: entry.scope,
         ...(resolved.manifest.skills.length > 0 && { only: [...newSkills] }),
       };
 
