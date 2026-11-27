@@ -81,6 +81,7 @@ Keep the entry shape (`source`, `skill`, optional `ref`) aligned with skills.sh 
 | `kitcrate remove <name>` | Remove a collection; delete only skills kitcrate installed itself (see ownership rules) |
 | `kitcrate list` | Show every installed skill with its path, its agents, its collection, and its own source |
 | `kitcrate create` | Publish flow (below) |
+| `kitcrate publish [name]` | Publish a change to a collection that already exists (below) |
 | `kitcrate validate [path]` | Check `collection.json` and referenced skills |
 
 ### Where a member skill comes from
@@ -163,6 +164,45 @@ kitcrate only removes skills it installed itself.
 9. Commit, tag `v0.1.0`.
 10. `gh repo create <name> --<visibility> --source . --push --remote <name>`.
 11. Print the install command: `kitcrate add github:<user>/<name>`.
+
+### `kitcrate publish` flow
+
+`kitcrate create` publishes a collection that does not exist yet. `kitcrate publish` publishes a
+change to one that does.
+
+1. It asks which collection to publish. The candidates are every collection in the project's
+   `kitcrate-lock.json`, each labelled with its scope, plus every repository among the globally
+   installed skills — a global collection has no lockfile of its own, because `kitcrate-lock.json`
+   always lives in the project that installed it. A collection named as the argument is used
+   without asking.
+2. It clones the collection's repository into a temporary directory. **The user's working tree is
+   never written to.** The local skills come from the collection's own scope: a project
+   collection's skills are in the project's `.agents/skills`, a global one's in
+   `~/.agents/skills`.
+3. It lists the installed skills the collection does not have yet, and the user picks which to
+   add. The picker is the same one `create` uses: names only, an empty box that becomes a green
+   tick, nothing pre-ticked.
+4. It copies the picked skills into the clone, and copies over any local change to a member the
+   collection already carries. A copied skill becomes a `.` member, meaning "this collection",
+   so consumers install it from the collection's repository.
+5. It rewrites `collection.json` with the new members, bumps the patch version, commits as
+   `chore: collection <name> v<version>`, tags `v<version>`, and pushes.
+
+**Only a `.` member is updated from the local copy.** A member whose source is another repository
+is installed by consumers *from that repository*, so changing its folder inside the collection
+repository would change nothing for them. Those differences are reported instead, so the author
+knows the change belongs in the repository that serves the skill.
+
+**Where it goes.** `gh api repos/{owner}/{repo} --jq .permissions.push` decides. When the user
+may push, the collection's own repository is updated and its remote is left alone. When they may
+not, the collection is published to a new repository under their own account, named after the
+collection, private unless they explicitly ask for public.
+
+**A release is built on a branch.** A lockfile entry may name a tag, which is a release rather
+than a place to commit. The release is then built on the default branch, and the command says so.
+
+**Nothing to publish is not a release.** When no skill is added and no member changed, no version
+is raised and nothing is pushed.
 
 ### Publishing into a repository that already has remotes
 

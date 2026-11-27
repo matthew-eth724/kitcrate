@@ -222,3 +222,29 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
     `recordInstalls`, so the member-source test records what was asked for instead of fetching
     a remote repository. The create suite stubs the installed-skill lookup for the same reason
     and because the real machine's lock files would otherwise decide the result.
+
+- feat-021 (done): `kitcrate publish` pushes a change to a collection that already exists.
+  - `src/core/publish-targets.ts` gathers the candidates: every collection in the project's
+    `kitcrate-lock.json` with its scope, plus every repository among the globally installed
+    skills, since a global collection has no lockfile of its own. One repository recorded in two
+    forms is listed once.
+  - `src/core/publish-plan.ts` holds the pure logic: the folder diff, the member folder lookup
+    by the name in `SKILL.md`, the parent directory a new member goes in, the patch bump, and
+    the manifest rewrite.
+  - `src/commands/publish.ts` clones the collection into a temporary directory — never the
+    user's working tree — asks which collection to publish, offers the installed skills it does
+    not have yet with the same picker `create` uses, copies the chosen ones in, copies over any
+    local change to a member it already carries, rewrites `collection.json`, bumps the version,
+    commits as `chore: collection <name> v<version>`, tags `v<version>`, and pushes.
+  - A copied skill is a `.` member, so consumers install it from the collection's repository.
+    Only a `.` member is updated from the local copy: a member served by another repository is
+    installed from there, so a difference in its folder is reported rather than copied.
+  - `gh api repos/{owner}/{repo} --jq .permissions.push` decides where it goes. With push access
+    the collection's own repository is updated; without it, a new private repository is created
+    under the user's account and the original is left alone.
+  - `src/core/release.ts` now holds the release tag rule that `create` and `publish` share, and
+    `src/core/secrets.ts` holds the credential exclusion both run before a push.
+  - Review found three defects, all fixed: a collection pinned to a tag left the clone detached,
+    so the push had no branch to send; a non-interactive run with several collections installed
+    published the first one without saying so; and an installed skill with no folder was
+    reported as changed but never copied.

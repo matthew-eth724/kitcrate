@@ -179,3 +179,45 @@ whose lock file entry names that repository, and the listing rendered
 Open, and worth knowing: the project `skills-lock.json` is version 2 and the global
 `~/.agents/.skill-lock.json` is version 3. A fixture written at the wrong version is silently
 read as empty, so a source looks "not recorded".
+
+## feat-021 — `kitcrate publish`, pushing a change to an existing collection (done)
+
+`kitcrate create` publishes a collection that does not exist yet. There was no way to push a
+change to one that already exists, so adding a skill to a collection meant editing its repository
+by hand.
+
+- `src/core/publish-targets.ts` gathers the candidates: every collection in the project's
+  `kitcrate-lock.json`, each labelled with its scope, plus every repository among the globally
+  installed skills. A global collection has no lockfile of its own, because `kitcrate-lock.json`
+  always lives in the project that installed it.
+- `src/commands/publish.ts` clones the collection's repository into a temporary directory — the
+  user's working tree is never written to — reads its manifest from the clone, and puts the clone
+  on the branch the lockfile names. A tag is a release rather than a place to commit, so a
+  collection pinned to one is built on the default branch instead, and the command says so.
+- The local skills come from the collection's own scope. The new ones are offered with the same
+  picker `create` uses: names only, an empty box that becomes a green tick, nothing pre-ticked.
+- A picked skill is copied into the clone and recorded as a `.` member, so consumers install it
+  from the collection's repository. Only a `.` member is updated from the local copy: a member
+  served by another repository is installed from there, so a difference in its folder is reported
+  rather than copied.
+- The version is bumped, the commit is `chore: collection <name> v<version>`, and the release is
+  tagged `v<version>`. `src/core/release.ts` now holds that tag rule, shared with `create`, and
+  `src/core/secrets.ts` holds the credential exclusion both run before a push.
+- `gh api repos/{owner}/{repo} --jq .permissions.push` decides where it goes: with push access
+  the collection's own repository is updated and its remote is left alone; without it, a new
+  private repository is created under the user's account.
+- Nothing to publish is not a release: no version is raised and nothing is pushed.
+
+Commits: `894bd2d` the core helpers, `4a35901` the shared release and credential extraction,
+`319966c` the command and its wiring, `104c557` three fixes found in review.
+
+Verification: `pnpm typecheck`, `pnpm lint`, `pnpm test` (202 passed, 18 files), `pnpm build`.
+Checked on the real artifact: a local bare repository standing in for GitHub received the new
+commit, the new member, the updated member, the bumped manifest and the `v0.1.1` tag; with push
+permission refused, a new private repository appeared under the user's account and the original
+was untouched; driven through a real terminal, the collection picker offered both collections
+with their scope and the skill picker showed an empty box that became a green tick on space.
+
+Open, and worth knowing: the global candidate list costs about 8 seconds, because the `skills`
+API scans every agent's directory to read the global lockfile. The command shows the loading
+indicator while it waits.
