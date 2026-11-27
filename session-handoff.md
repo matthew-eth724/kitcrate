@@ -244,3 +244,21 @@ Verification: `pnpm typecheck`, `pnpm lint`, `pnpm test` (204 passed, 19 files),
 On the real artifact, the exact repro from the report (a collection whose member has source `.`)
 now reports `collection.json is valid` with zero warnings; an unreachable `owner/repo` member
 still warns as before.
+
+## Dependency: skills comes from npm now
+
+kitcrate pinned the `skills` package to `file:../skills-cli`, a local checkout under
+`/home/matthew/skills-cli`. That tied the build to this machine: a fresh clone anywhere else
+could not install, because the path pointed at a directory that does not exist. The skills CLI
+ships on npm, so `package.json` now declares `"skills": "^1.9.0"` and pnpm resolves it from the
+registry. Commit `76525f8`.
+
+The isolated `src/skills/index.ts` adapter is unchanged: the public API it uses (`resolveSource`,
+`installSkills`, `listSkills`, `removeSkills`, and the discovery helpers) is the same in the
+registry package. The registry `skills@1.9.0` requires Node `>=22.20.0` (the local checkout said
+`>=20`); we run Node 24, so this is fine.
+
+This also removes the worktree symlink dance. When a delegate ran in a worktree, `../skills-cli`
+only resolved through a hand-made symlink at `.claude/worktrees/skills-cli`. That is gone now —
+every delegate worktree installs `skills` from npm on its own. The leftover symlink files under
+`.claude/worktrees/` can be deleted.

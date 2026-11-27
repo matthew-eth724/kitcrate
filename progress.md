@@ -42,7 +42,7 @@
 
 ## Decisions Made
 
-- `skills` package pinned via `file:../skills-cli` in package.json; built with `pnpm build` in skills-cli
+- The `skills` package is a registry dependency (`^1.9.0`) resolved by pnpm, isolated behind `src/skills/index.ts`. There is no local checkout to build or symlink.
 - Node16 module resolution with `.js` extensions in import paths
 - All core modules typecheck clean with strict TypeScript
 - Name normalization lives in `src/core/name.ts` as a pure function returning a discriminated union, so an invalid name is unrepresentable in the success branch. The `collection.json` schema still rejects invalid names.
