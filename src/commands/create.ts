@@ -1,12 +1,13 @@
 import { writeFile } from 'fs/promises';
 import { basename, join, resolve } from 'path';
-import { confirm, isCancel, log, multiselect, select, text } from '@clack/prompts';
+import { confirm, isCancel, log, select, text } from '@clack/prompts';
 import { isCredentialFileName, scanFilesForSecrets, scanForSecrets } from '../core/secrets.js';
 import { ensureEnvIgnoreRules } from '../core/gitignore.js';
 import { type CollectionManifest } from '../core/manifest.js';
 import { computeManifestHash } from '../core/hash.js';
 import { normalizeCollectionName } from '../core/name.js';
 import { discoverSkillsInDirectory, type DiscoveredSkill } from '../skills/index.js';
+import { pickSkills } from './pick-skills.js';
 import {
   git,
   gh,
@@ -355,17 +356,12 @@ async function collectInputs(context: {
     }
   }
 
-  const selection = await multiselect({
-    message: 'Select skills to include',
-    options: discovered.map((skill) => ({
-      value: skill.name,
-      label: skill.name,
-      hint: skill.description,
-    })),
-    initialValues: discovered.map((skill) => skill.name),
-    required: false,
-  });
-  if (isCancel(selection)) return cancelled();
+  const selection = await pickSkills(
+    'Select skills to include',
+    discovered.map((skill) => ({ value: skill.name, label: skill.name })),
+    discovered.map((skill) => skill.name)
+  );
+  if (selection === null) return cancelled();
 
   const chosen = new Set(selection);
   const selectedSkills = discovered.filter((skill) => chosen.has(skill.name));
