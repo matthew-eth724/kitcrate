@@ -79,9 +79,28 @@ Keep the entry shape (`source`, `skill`, optional `ref`) aligned with skills.sh 
 | `kitcrate install` | Restore all collections from both lockfiles; verify `manifestHash` |
 | `kitcrate update [name]` | Re-resolve ref, diff manifests, add/remove/bump skills, rewrite lock |
 | `kitcrate remove <name>` | Remove a collection; delete only skills kitcrate installed itself (see ownership rules) |
-| `kitcrate list` | Show installed collections, their scope, and their skills |
+| `kitcrate list` | Show every installed skill with its path, its agents, its collection, and its own source |
 | `kitcrate create` | Publish flow (below) |
 | `kitcrate validate [path]` | Check `collection.json` and referenced skills |
+
+### The listing
+
+`kitcrate list` is a listing of skills, not of collections. One entry per (collection, skill)
+pair, and each entry names four things: the skill and where it is installed, the agents it is
+installed for, the collection that brought it, and the source the skill itself came from.
+
+- The collection's `ref`, `commit`, `manifestHash`, and `only` stay out of the human output.
+  They stay in the JSON, which is the machine-readable view.
+- An installed skill is matched by name **and** scope. The adapter lists both scopes, so a
+  global skill that shares a name with a project member would otherwise lend its path and
+  source to a copy the collection never installed.
+- The path is abbreviated with `~` for the home directory. The agents line shows five display
+  names, then `+N more`.
+- The listing reads only the scopes its collections use. Reading the global scope is the
+  expensive half: it holds a copy of every skill for every agent on the machine.
+- The human output is coloured with Node's `styleText`, which is a no-op off a terminal, so a
+  piped run stays plain. A loading spinner appears only when the wait is long enough to be
+  worth drawing, and never in `--json` mode or off a terminal.
 
 ### Install scope
 

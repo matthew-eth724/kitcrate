@@ -101,3 +101,39 @@
 - `update` still has no integration coverage, at either scope. `test/add.test.ts` drives `add`, `install`, and `remove` against a local git repository with a sandboxed `HOME`; `update` is the obvious next gap.
 - Consider the "copy skills into the repo" mode for `create`, which AGENTS.md lists in the publish flow but is not built.
 - `create` still only reports credential files that were tracked when the run started. A retry finds them already unstaged, so the "excluded from publish" report comes back empty even though the files are still kept out of the commit.
+
+## feat-019 — the `kitcrate list` rework (done)
+
+The listing shows skills, not collections. One entry per (collection, skill) pair:
+
+    account-activity ~/abc/.agents/skills/account-activity
+
+    Agents: Claude Code, Codex, fx, Gemini CLI, GitHub Copilot +2 more
+
+    Collection: matt711/mywebskills
+
+    Source: acme/webtools
+
+- `src/core/listing.ts` holds the shape and the rendering: `buildListedEntries`, `formatAgents`,
+  `abbreviateHome`, `formatEntry`, `styleEntry`, `formatList`, `toJsonList`, `sortedCollections`,
+  `scopesToRead`. The plain and the coloured rendering go through one renderer, so they cannot
+  drift apart.
+- `src/commands/list.ts` is dispatch, the spinner guard, and the I/O.
+- `src/skills/index.ts` passes the installed `path` through and maps an agent id to its display
+  name through `getSupportedAgents()`.
+- The collection's `ref`, `commit`, `manifestHash`, and `only` left the human output and stayed
+  in the JSON.
+- An installed skill is matched by name **and** scope. Before, a global skill sharing a name
+  with a project member lent its path and source to the project collection. That was the double
+  listing the user reported.
+- The listing reads only the scopes its collections use. The global scope holds a copy of every
+  skill for every agent on the machine: 7.9 s against 68 ms for the project scope here.
+- The human output is coloured with Node's `styleText` (a no-op off a terminal) and a spinner
+  appears only when the wait outlasts 300 ms.
+
+Commits: `fc7aadf` the listing itself, `1772fa0` one renderer and a spinner that waits first,
+`6eaa469` read only the scopes the collections use.
+
+Verification: `pnpm typecheck`, `pnpm lint`, `pnpm test` (125 passed, 11 files), `pnpm build`.
+Checked on the real artifact in a pty: the format, the colours, the spinner, the `~`
+abbreviation, the `+N more` truncation, and a project listing next to a global one.

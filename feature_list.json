@@ -182,6 +182,18 @@
       ],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-019",
+      "name": "List skills, not collections",
+      "description": "kitcrate list showed every skill twice, once with the collection repo as its source and once with the skill's own repo, and it printed the collection's ref, commit, manifest hash and only filter. The listing is now one entry per skill, with its path, its agents, its collection and its own source, coloured, with a loading spinner for a slow read",
+      "dependencies": [
+        "feat-003",
+        "feat-007",
+        "feat-016"
+      ],
+      "status": "done",
+      "evidence": "pnpm typecheck, pnpm lint, pnpm test (125 passed, 11 files) and pnpm build all pass. Verified on the real artifact in a pty: one entry per skill, no ref/commit/manifestHash/only, the home directory abbreviated to ~, five agent names then '+N more', bold names with dim paths and labels, a cyan collection and a green source, and the spinner erased before the listing. The JSON lists each skill once with its agent ids and carries no escape sequences. A global skill sharing a name with a project member no longer leaks into the project listing, which was the double listing the user reported"
     }
   ]
 }

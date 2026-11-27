@@ -175,3 +175,23 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
   which is what `kitcrate create` writes. The resolver does not accept a bare `.` as a local
   path the way the `skills` package does, and a skill source has to resolve relative to the
   collection.json's own directory rather than the working directory.
+
+- feat-019 (done): `kitcrate list` is a listing of skills, not of collections. One entry per
+  (collection, skill) pair, each naming the skill and where it is installed, the agents it is
+  installed for, the collection that brought it, and the source the skill itself came from.
+  - The collection's `ref`, `commit`, `manifestHash`, and `only` left the human output. They
+    stay in the JSON, which is the machine-readable view.
+  - The double listing was two bugs. The output printed the collection's skill list and then
+    the installed list. It also matched an installed skill by name alone, so a global skill
+    that shared a name with a project member lent its path, its source, and its agent list to
+    the project collection. The match is by name and scope now.
+  - The path is abbreviated with `~` for the home directory, the agents line shows five
+    display names and then `+N more`, and the JSON carries the agent ids next to the names.
+  - The human output is coloured with Node's `styleText`, which is a no-op off a terminal, so
+    a piped run stays plain without a second code path. The loading spinner appears only when
+    the wait outlasts 300 ms, and it is erased when the work lands. It never runs in `--json`
+    mode or off a terminal.
+  - The listing reads only the scopes its collections use. Reading the global scope is the
+    expensive half: it holds a copy of every skill for every agent on the machine. On this
+    machine that is 7.9 s against 68 ms for the project scope, and the listing waited for all
+    of it. A project-only listing is now about a second, most of it the CLI's own start-up.
