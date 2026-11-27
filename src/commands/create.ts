@@ -6,7 +6,9 @@ import { ensureEnvIgnoreRules } from '../core/gitignore.js';
 import { type CollectionManifest } from '../core/manifest.js';
 import { computeManifestHash } from '../core/hash.js';
 import { normalizeCollectionName } from '../core/name.js';
+import { withProgress } from './progress.js';
 import { chooseRemoteName } from '../core/remote.js';
+import { resolveMemberSources } from '../core/member-sources.js';
 import { discoverSkillsInDirectory, type DiscoveredSkill } from '../skills/index.js';
 import { pickSkills } from './pick-skills.js';
 import {
@@ -97,13 +99,28 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
     // Step 5: write the .gitignore.
     const gitignoreStatus = await ensureEnvIgnoreRules(sourceDir);
 
-    // Step 6. Write collection.json.
+    // Step 6. Write collection.json. Each member records where the skill itself
+    // came from, so the installers fetch it from its own repository instead of
+    // this one.
+    const sources = await withProgress(json, 'Reading where these skills came from', () =>
+      resolveMemberSources(selectedSkills)
+    );
+    if (sources.unattributed.length > 0) {
+      say(
+        json,
+        `Recording source "." for ${sources.unattributed.length} skill(s), which installs them from this collection:`
+      );
+      for (const { skill, reason } of sources.unattributed) {
+        say(json, `  - ${skill}: ${reason}`);
+      }
+    }
+
     const manifest: CollectionManifest = {
       name,
       version: '0.1.0',
       description,
       skills: selectedSkills.map((s) => ({
-        source: '.', // local path reference
+        source: sources.byName.get(s.name) ?? '.',
         skill: s.name,
       })),
     };
@@ -255,7 +272,7 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       description,
       visibility,
       remote,
-      skills: selectedSkills.map((skill) => skill.name),
+      skills: manifest.skills.map((member) => ({ name: member.skill, source: member.source })),
       manifestHash,
       gitignore: gitignoreStatus,
       excluded,
@@ -269,6 +286,11 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
     console.log(`\nCollection "${name}" published (v0.1.0).`);
     if (remote !== 'origin') {
       console.log(`  published to the "${remote}" remote, because "origin" was already taken.`);
+    }
+    for (const member of manifest.skills) {
+      console.log(
+        `  ${member.skill}: from ${member.source === '.' ? 'this collection' : member.source}`
+      );
     }
     console.log(`  manifestHash: ${manifestHash}`);
     console.log(`  .gitignore: ${gitignoreStatus}`);

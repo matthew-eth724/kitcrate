@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { discoverSkillsInDirectory } from '../src/skills/index.js';
 import { createCommand } from '../src/commands/create.js';
 import { normalizeCollectionName } from '../src/core/name.js';
+import { CollectionManifestSchema } from '../src/core/manifest.js';
 import { git } from '../src/git/index.js';
+import * as adapter from '../src/skills/index.js';
+import type { ListedSkill } from '../src/skills/index.js';
 
 /** Write a minimal SKILL.md with the given frontmatter into `dir`. */
 async function writeSkill(dir: string, name: string, description: string): Promise<void> {
@@ -122,6 +125,11 @@ describe('createCommand', () => {
     process.env['GIT_AUTHOR_EMAIL'] = 'test@kitcrate.local';
     process.env['GIT_COMMITTER_NAME'] = 'kitcrate test';
     process.env['GIT_COMMITTER_EMAIL'] = 'test@kitcrate.local';
+
+    // Reading the real lock files scans every agent's directory on the machine,
+    // which is slow and depends on what happens to be installed. A skill this
+    // suite did not describe therefore has no source, so it records ".".
+    stubInstalled([]);
   });
 
   afterEach(async () => {
@@ -168,15 +176,74 @@ describe('createCommand', () => {
     expect(code).toBe(0);
     const result = JSON.parse(stdout) as {
       name: string;
-      skills: string[];
+      skills: Array<{ name: string; source: string }>;
       published: boolean;
     };
     // The directory name is normalized into the convention, uppercase included.
     const expected = normalizeCollectionName(basename(root));
     expect(expected.ok).toBe(true);
     expect(result.name).toBe(expected.ok ? expected.name : '');
-    expect(result.skills.sort()).toEqual(['alpha', 'beta']);
+    expect(result.skills.map((s) => s.name).sort()).toEqual(['alpha', 'beta']);
     expect(result.published).toBe(true);
+  });
+
+  /** A stand-in for what the `skills` lock file reports for an installed skill. */
+  function installedFrom(name: string, source: string | undefined): ListedSkill {
+    return {
+      name,
+      description: `The ${name} skill`,
+      scope: 'global',
+      path: `/home/someone/.agents/skills/${name}`,
+      agents: ['claude-code'],
+      agentNames: ['Claude Code'],
+      ...(source !== undefined && { source }),
+    };
+  }
+
+  /** Make the adapter report the given installed skills, keeping discovery real. */
+  function stubInstalled(skills: readonly ListedSkill[]): void {
+    vi.spyOn(adapter, 'listInstalledSkills').mockResolvedValue(skills);
+  }
+
+  it('writes each skill’s own repository into the manifest, and "." when it has none', async () => {
+    for (const name of ['account-activity', 'own-skill', 'local-skill']) {
+      await writeSkill(join(root, '.agents', 'skills', name), name, `The ${name} skill`);
+    }
+    stubInstalled([
+      installedFrom('account-activity', 'acme/webtools'),
+      installedFrom('own-skill', 'https://github.com/acme/webtools.git'),
+      installedFrom('local-skill', '/home/someone/scratch/skills'),
+    ]);
+
+    const { code } = await runCreate(root);
+
+    expect(code).toBe(0);
+    const manifest = JSON.parse(await readFile(join(root, 'collection.json'), 'utf8')) as {
+      skills: Array<{ source: string; skill: string }>;
+    };
+    const sources = Object.fromEntries(manifest.skills.map((s) => [s.skill, s.source]));
+    expect(sources).toEqual({
+      'account-activity': 'acme/webtools',
+      'own-skill': 'acme/webtools',
+      'local-skill': '.',
+    });
+    // The schema accepts what was written, and still refuses the URL form.
+    expect(CollectionManifestSchema.safeParse(manifest).success).toBe(true);
+  });
+
+  it('says which skills fell back to "." and why', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await writeSkill(join(root, '.agents', 'skills', 'beta'), 'beta', 'The beta skill');
+    stubInstalled([installedFrom('alpha', '/home/someone/scratch/skills')]);
+
+    const { code, stdout } = await runCreate(root);
+
+    expect(code).toBe(0);
+    const reported = JSON.parse(stdout) as { skills: Array<{ name: string; source: string }> };
+    expect(reported.skills).toEqual([
+      { name: 'alpha', source: '.' },
+      { name: 'beta', source: '.' },
+    ]);
   });
 
   it('commits the collection files and the skill folders', async () => {
