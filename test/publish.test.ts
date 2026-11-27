@@ -511,4 +511,86 @@ describe('publishCommand', () => {
     expect(code).toBe(1);
     expect(stderr).toContain('No installed collection named "no-such-collection"');
   });
+
+  it('builds the release on the default branch when the collection is pinned to a tag', async () => {
+    stubProjectSkills();
+    // A tag is a release, not a branch to commit on. Publishing on it would
+    // leave the clone detached and the push would have no branch to send.
+    const lock = JSON.parse(
+      await readFile(join(projectDir, 'kitcrate-lock.json'), 'utf8')
+    ) as Record<string, unknown>;
+    const collections = lock['collections'] as Record<string, Record<string, unknown>>;
+    const entry = collections['web-security'];
+    if (entry !== undefined) entry['ref'] = 'v0.1.0';
+    await writeFile(
+      join(projectDir, 'kitcrate-lock.json'),
+      JSON.stringify(lock, null, 2) + '\n',
+      'utf8'
+    );
+
+    const { code, stderr } = await runPublish(['web-security']);
+
+    expect(code, stderr).toBe(0);
+    expect(stderr).toContain('pinned to "v0.1.0"');
+    // The default branch carries the release, and no branch named HEAD was
+    // created by a detached push.
+    const branches = await git(['--git-dir', bare, 'branch', '--format=%(refname)']);
+    expect(branches.stdout).toContain('refs/heads/master');
+    expect(branches.stdout).not.toContain('refs/heads/HEAD');
+    const subject = await git(['--git-dir', bare, 'log', '-1', '--format=%s', 'master']);
+    expect(subject.stdout.trim()).toBe('chore: collection web-security v0.1.1');
+  });
+
+  it('asks which collection to publish rather than picking one when several are installed', async () => {
+    stubProjectSkills();
+    const lock = JSON.parse(
+      await readFile(join(projectDir, 'kitcrate-lock.json'), 'utf8')
+    ) as Record<string, unknown>;
+    const collections = lock['collections'] as Record<string, unknown>;
+    collections['other-collection'] = {
+      source: `github:${COLLECTION_REPO}`,
+      ref: 'master',
+      commit: 'abc123',
+      manifestHash: 'sha256-abc',
+      skills: ['alpha'],
+      preexisting: [],
+      scope: 'project',
+    };
+    await writeFile(
+      join(projectDir, 'kitcrate-lock.json'),
+      JSON.stringify(lock, null, 2) + '\n',
+      'utf8'
+    );
+
+    const { code, stderr } = await runPublish([]);
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('name the one to publish');
+    expect(stderr).toContain('web-security');
+    // Nothing was published.
+    const log = await readFile(join(root, 'gh.log'), 'utf8');
+    expect(log.trim()).toBe('');
+  });
+
+  it('leaves a member alone when its installed copy has no folder to compare', async () => {
+    vi.spyOn(adapter, 'listInstalledSkills').mockImplementation(async (options = {}) => {
+      if (options.scope === 'global') return [];
+      const skills = join(projectDir, '.agents', 'skills');
+      return [
+        // alpha is installed, but the adapter could not name its folder.
+        { ...installedIn('project', 'alpha', join(skills, 'alpha')), path: undefined },
+        installedIn('project', 'gamma', join(skills, 'gamma')),
+      ];
+    });
+
+    const { code, stdout, stderr } = await runPublish(['web-security']);
+
+    expect(code, stderr).toBe(0);
+    const result = JSON.parse(stdout) as {
+      leftAlone: Array<{ skill: string; reason: string }>;
+      updated: Array<{ name: string }>;
+    };
+    expect(result.updated.map((entry) => entry.name)).not.toContain('alpha');
+    expect(result.leftAlone.map((entry) => entry.skill)).toContain('alpha');
+  });
 });

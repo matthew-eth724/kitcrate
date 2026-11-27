@@ -130,7 +130,13 @@ export async function publishCommand(argv: string[], options: CommandOptions): P
     // The manifest a clone's root holds is the default branch's. A lockfile
     // entry names a ref, and a changed version could collide with a tag that
     // ref already made, so publish on top of the ref the collection is on.
-    await switchToCollectionRef(repoRoot, chosen.target);
+    const releaseRef = await switchToCollectionRef(repoRoot, chosen.target);
+    if (releaseRef !== null) {
+      console.error(
+        `The collection is pinned to "${releaseRef}", which is a release rather than a branch. ` +
+          'The release was built on the default branch.'
+      );
+    }
 
     // 3. The local skills, in the collection's own scope.
     const installed = await listInstalledSkills({
@@ -302,10 +308,26 @@ async function chooseTarget(
     return { ok: true, target: only };
   }
 
-  if (nonInteractive || targets.length === 1) {
+  if (nonInteractive) {
+    // Picking the first of several would publish the wrong collection without
+    // saying so, so the name is required instead.
+    if (targets.length > 1) {
+      console.error('More than one collection is installed; name the one to publish.');
+      console.error(
+        `Known collections: ${targets.map((target) => targetLabel(target)).join(', ')}`
+      );
+      return { ok: false, exitCode: 1 };
+    }
     const [only] = targets;
     if (only === undefined) return { ok: false, exitCode: 1 };
     say(json, `Non-interactive: publishing "${targetLabel(only)}".`);
+    return { ok: true, target: only };
+  }
+
+  if (targets.length === 1) {
+    const [only] = targets;
+    if (only === undefined) return { ok: false, exitCode: 1 };
+    say(json, `Publishing "${targetLabel(only)}".`);
     return { ok: true, target: only };
   }
 
@@ -348,22 +370,27 @@ function targetHint(target: PublishTarget): string {
  * manifest published is the one on top of the release consumers are on and the
  * push has a branch to send.
  *
- * A ref that names a tag or a commit rather than a branch is not a place to
- * commit, so the clone stays on the default branch it arrived on; the copy it
- * holds is the default branch's either way.
+ * Only a branch can be committed on and pushed. A tag or a commit is a
+ * release, not a place to build the next one, so the clone stays on the
+ * default branch it arrived on. The ref that was not a branch comes back, so
+ * the command can say where the release was built.
  */
-async function switchToCollectionRef(repoRoot: string, target: PublishTarget): Promise<void> {
-  if (target.origin !== 'lockfile') return;
+async function switchToCollectionRef(
+  repoRoot: string,
+  target: PublishTarget
+): Promise<string | null> {
+  if (target.origin !== 'lockfile') return null;
   const ref = target.ref;
-  if (ref === undefined || ref === '') return;
+  if (ref === undefined || ref === '') return null;
+
+  const isBranch =
+    (await git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${ref}`], repoRoot))
+      .code === 0;
+  if (!isBranch) return ref;
 
   const onBranch = await git(['checkout', '-B', ref, '--no-track', `origin/${ref}`], repoRoot);
-  if (onBranch.code === 0) return;
-
-  // The ref may be the branch the clone is already on, in which case there is
-  // no `origin/<ref>` to start from.
-  const existing = await git(['checkout', ref], repoRoot);
-  if (existing.code !== 0) return;
+  if (onBranch.code !== 0) return ref;
+  return null;
 }
 
 /** What the survey of one collection found. */
@@ -419,8 +446,15 @@ async function survey(context: {
     const repoPath = memberFolders.get(member.skill);
     const local = localByName.get(member.skill);
     if (repoPath === undefined || local === undefined) continue;
+    if (local.path === undefined) {
+      leftAlone.push({
+        skill: member.skill,
+        reason: 'it is installed but no folder was found for it, so there is nothing to compare',
+      });
+      continue;
+    }
 
-    const diff = await diffSkillFolders(local.path ?? '', join(repoRoot, repoPath));
+    const diff = await diffSkillFolders(local.path, join(repoRoot, repoPath));
     if (!diff.changed) continue;
 
     if (!isOwnMember(member)) {
@@ -681,7 +715,7 @@ async function createRepository(
 
   const visibility = await chooseVisibility(name, nonInteractive);
   if (visibility === null) {
-    console.error('Publication cancelled: public visibility was not confirmed.');
+    console.error('Publication cancelled: the visibility was not confirmed.');
     return { ok: false };
   }
 
@@ -726,26 +760,18 @@ async function createRepository(
   };
 }
 
-/** Private unless the user explicitly confirms public, the way `create` asks. */
+/** Private unless the user explicitly asks for public, the way `create` asks. */
 async function chooseVisibility(
   name: string,
   nonInteractive: boolean
 ): Promise<'private' | 'public' | null> {
   if (nonInteractive) return 'private';
   const answer = await confirm({
-    message: `Publish "${name}" as a new PRIVATE GitHub repository?`,
-    initialValue: true,
-  });
-  if (isCancel(answer)) return null;
-  // A public repository needs an explicit, separate confirmation.
-  if (answer) return 'private';
-
-  const isPublic = await confirm({
     message: `Publish "${name}" as a PUBLIC GitHub repository? Anyone will be able to read it.`,
     initialValue: false,
   });
-  if (isCancel(isPublic)) return null;
-  return isPublic ? 'public' : null;
+  if (isCancel(answer)) return null;
+  return answer ? 'public' : 'private';
 }
 
 /** True when this user may push to a GitHub repository. */
