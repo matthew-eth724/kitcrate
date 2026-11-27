@@ -84,6 +84,26 @@ Keep the entry shape (`source`, `skill`, optional `ref`) aligned with skills.sh 
 | `kitcrate publish [name]` | Publish a change to a collection that already exists (below) |
 | `kitcrate validate [path]` | Check `collection.json` and referenced skills |
 
+### Required tools
+
+kitcrate shells out to `git`, and to `gh` for the GitHub operations. It reimplements neither, so a
+command that needs one cannot run without it. Every command checks for the tools it needs **before
+it does any work** — before the clone, the commit, the tag, or the remote — and stops with a message
+naming the tool, why the command needs it, and where to get it. `--help` works without either, and
+an unknown command is reported by the dispatcher rather than as a missing tool.
+
+| Command | Needs |
+|---|---|
+| `add`, `install`, `update`, `remove` | `git` |
+| `create`, `publish` | `git` and `gh` |
+| `list`, `validate` | neither |
+
+The table lives in `src/core/tools.ts` (`COMMAND_TOOLS`), and `main` in `src/cli.ts` runs the check
+between the `--help` handling and the command handler. A command added there is checked; one omitted
+needs nothing. This replaced a failure that was blank: a missing `gh` surfaced as
+`Failed to create GitHub repo: ` — exit 1, no detail — because a program that was never started writes
+no stderr, and that was reported *after* the commit.
+
 ### Where a member skill comes from
 
 A manifest entry names where its skill comes from, and may pin a ref for it:

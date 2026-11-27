@@ -281,3 +281,18 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
     fixes a percent-encoded pathname for a directory with a space in its name. `test/cli.test.ts`
     runs the built bundle through a symlink in a subprocess, so the case an install creates is the
     case the suite checks.
+
+- feat-022 (done): a command whose tools are missing refuses to run, and says so.
+  - `kitcrate create` with no `gh` installed printed `Failed to create GitHub repo: ` — exit 1, no
+    detail — after it had already committed and tagged. A program that never started writes no
+    stderr, so the error detail was empty and the colon ended the message. `add` showed the same
+    shape for a missing `git`: a blank failure, after the clone attempt.
+  - `src/core/tools.ts` declares which tools each command runs (`COMMAND_TOOLS`) and checks for
+    them by running `<tool> --version`, which touches neither the network nor a repository.
+    The reason a command wants a tool is per command, so `remove` says "to delete the skills it
+    installed" rather than borrowing `add`'s "to clone the collection".
+  - `src/cli.ts` runs the check between the `--help` handling and the command handler: help still
+    works without either tool, an unknown command is still reported by the dispatcher, and no
+    command does work before its tools are known to be present.
+  - `test/tools.test.ts` covers the per-command requirements, the both-missing case, and the
+    message content. Verified on the built CLI with a PATH holding node and nothing else.

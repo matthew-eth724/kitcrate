@@ -219,6 +219,17 @@
       ],
       "status": "done",
       "evidence": "pnpm typecheck, pnpm lint, pnpm test (202 passed, 18 files) and pnpm build all pass. src/core/publish-targets.ts gathers the candidates: every collection in the project's kitcrate-lock.json, each with its scope, plus every repository among the globally installed skills, de-duplicated across the two forms of one source. src/core/publish-plan.ts holds the pure logic: the folder diff, the member folder lookup by SKILL.md name, the parent directory a new member goes in, the patch bump, and the manifest rewrite. src/commands/publish.ts does the rest: it clones the collection into a temporary directory, never the user's working tree, surveys the installed skills, asks which new ones to add with the same picker create uses, copies them in, rewrites collection.json, bumps the version, commits, tags, and pushes. src/core/release.ts now holds the release tag rule both create and publish use, and src/core/secrets.ts holds the credential exclusion both run. Verified on the real artifact: a local bare repository standing in for GitHub received the new commit, the new member, the updated member, the bumped manifest and the v0.1.1 tag; with push permission refused, a new private repository was created under the user's account and the original repository was left untouched; driven through a real terminal, the collection picker offered both collections with their scope and the skill picker showed an empty box that became a green tick on space. Three defects found in review were fixed: a collection pinned to a tag left the clone detached and the push had no branch, a non-interactive run with several collections installed published the first without saying so, and an installed skill with no folder was reported as changed but never copied"
+    },
+    {
+      "id": "feat-022",
+      "name": "Refuse to run a command whose tools are missing",
+      "description": "kitcrate shells out to git, and create and publish also to gh. With neither installed, a command failed partway through: create printed a blank \"Failed to create GitHub repo: \" after it had already committed and tagged, or crashed inside git with a raw spawn error. Each command now checks for the tools it needs before it does any work, and stops with a message naming the missing tool, what the command needs it for, and where to get it",
+      "dependencies": [
+        "feat-002",
+        "feat-014"
+      ],
+      "status": "done",
+      "evidence": "pnpm typecheck, pnpm lint, pnpm test (212 passed, 20 files) and pnpm build all pass. src/core/tools.ts declares which tools each command runs (COMMAND_TOOLS) and checks for them by running `<tool> --version` with a 10 s timeout, which touches neither the network nor a repository. src/cli.ts runs the check after --help and before the handler, so help still works without either tool and an unknown command is still reported by the dispatcher. Verified on the built CLI with a PATH holding node and no git or gh: create and publish name both tools and exit 1 without creating a repository, committing, tagging, or reaching the network; add, install, update, and remove name git and exit 1 before cloning; list and validate still run and exit 0. test/tools.test.ts proves the per-command requirements and the message content"
     }
   ]
 }
