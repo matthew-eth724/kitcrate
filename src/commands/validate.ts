@@ -1,5 +1,7 @@
 import { readFile } from 'fs/promises';
+import { dirname, resolve as resolvePath } from 'path';
 import { parseCollectionManifest, type CollectionManifest } from '../core/manifest.js';
+import { githubOwnerRepo } from '../core/source.js';
 import { resolveCollection } from '../core/resolve.js';
 import type { CommandOptions } from '../core/options.js';
 
@@ -52,9 +54,23 @@ export async function validateCommand(argv: string[], options: CommandOptions): 
     const warnings: string[] = [];
 
     for (const skillRef of manifest.skills) {
+      // A source that is not a GitHub repository is local to the collection:
+      // `.` is the collection's own skill, and the manifest schema allows no
+      // other non-repo source than a path beside this collection.json.
+      // `kitcrate create` writes `.` for a skill it cannot attribute, so
+      // every collection it publishes carries one. Resolving a bare `.` as a
+      // repository is the bug this skips: a `.` member lives in the directory
+      // that holds this collection.json, and it is present in the manifest by
+      // definition, so it validates without a network call.
+      const repo = githubOwnerRepo(skillRef.source);
+      const local = repo === null;
       const source = skillRef.ref ? `${skillRef.source}@${skillRef.ref}` : skillRef.source;
       try {
-        const resolved = await resolveCollection(source);
+        // A local path (`.` or a path beside the manifest) resolves against
+        // the directory holding this collection.json, not the network.
+        const resolved = local
+          ? await resolveCollection(resolvePath(dirname(path), skillRef.source))
+          : await resolveCollection(source);
         const found = resolved.manifest.skills.some((s) => s.skill === skillRef.skill);
         if (!found) {
           errors.push(`Skill "${skillRef.skill}" not found in source "${skillRef.source}"`);
