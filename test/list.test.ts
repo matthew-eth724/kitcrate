@@ -101,7 +101,7 @@ describe('list formatting', () => {
 
     const text = formatList(entries, false);
 
-    expect(text).toContain('gone not installed');
+    expect(text).toContain('gone (not installed)');
     expect(text).toContain('Source: not recorded in skills-lock.json');
   });
 

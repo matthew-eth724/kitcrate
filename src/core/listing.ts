@@ -88,27 +88,51 @@ export function buildListedEntries(
   );
 }
 
-/** Line 1 of an entry: the skill, its preexisting mark, and where it lives. */
-function heading(entry: ListedEntry): { name: string; note: string; path: string } {
+/** The colour formats the listing uses. */
+type PaintFormat = 'bold' | 'dim' | 'cyan' | 'green';
+
+/** Paints a fragment of text, or leaves it alone. */
+type Painter = (text: string, format: PaintFormat) => string;
+
+/** Leaves every fragment as it is. */
+const plain: Painter = (text) => text;
+
+/** Colours a fragment for a terminal. */
+const painted: Painter = (text, format) => styleText(format, text);
+
+/** Where the skill lives, and whether it was already there before the collection. */
+function heading(entry: ListedEntry): { name: string; note?: string; path: string } {
   return {
     name: entry.skill,
-    note: entry.preexisting ? 'preexisting' : '',
-    path: entry.path === undefined ? 'not installed' : abbreviateHome(entry.path),
+    ...(entry.preexisting && { note: 'preexisting' }),
+    path: entry.path === undefined ? '(not installed)' : abbreviateHome(entry.path),
   };
 }
 
-/** Render one entry as the human-readable block, without colour. */
-export function formatEntry(entry: ListedEntry): string {
+/**
+ * Render one entry as the human-readable block. The layout lives here so the
+ * plain and the coloured rendering cannot drift apart.
+ */
+function renderEntry(entry: ListedEntry, paint: Painter): string {
   const { name, note, path } = heading(entry);
+  const preexisting = note ? ` ${paint(`(${note})`, 'dim')}` : '';
+  const agents = entry.agents.length > 0 ? formatAgents(entry.agents) : paint('none', 'dim');
+  const source =
+    entry.source === undefined ? paint(UNKNOWN_SOURCE, 'dim') : paint(entry.source, 'green');
   return [
-    `${name}${note ? ` (${note})` : ''} ${path}`,
+    `${paint(name, 'bold')}${preexisting} ${paint(path, 'dim')}`,
     '',
-    `Agents: ${entry.agents.length > 0 ? formatAgents(entry.agents) : 'none'}`,
+    `${paint('Agents:', 'dim')} ${agents}`,
     '',
-    `Collection: ${entry.collectionSource}`,
+    `${paint('Collection:', 'dim')} ${paint(entry.collectionSource, 'cyan')}`,
     '',
-    `Source: ${entry.source ?? UNKNOWN_SOURCE}`,
+    `${paint('Source:', 'dim')} ${source}`,
   ].join('\n');
+}
+
+/** Render one entry without colour. */
+export function formatEntry(entry: ListedEntry): string {
+  return renderEntry(entry, plain);
 }
 
 /**
@@ -116,19 +140,7 @@ export function formatEntry(entry: ListedEntry): string {
  * stdout is not a TTY, so a piped run stays plain without a second code path.
  */
 export function styleEntry(entry: ListedEntry): string {
-  const { name, note, path } = heading(entry);
-  const dim = (text: string): string => styleText('dim', text);
-  const preexisting = note ? ` ${dim(`(${note})`)}` : '';
-  const agents = entry.agents.length > 0 ? formatAgents(entry.agents) : dim('none');
-  return [
-    `${styleText('bold', name)}${preexisting} ${dim(path)}`,
-    '',
-    `${dim('Agents:')} ${agents}`,
-    '',
-    `${dim('Collection:')} ${styleText('cyan', entry.collectionSource)}`,
-    '',
-    `${dim('Source:')} ${entry.source === undefined ? dim(UNKNOWN_SOURCE) : styleText('green', entry.source)}`,
-  ].join('\n');
+  return renderEntry(entry, painted);
 }
 
 /** The whole human-readable listing, one block per entry, separated by a blank line. */
@@ -148,6 +160,17 @@ export interface ListedEntryJson {
   readonly scope: InstallScope;
 }
 
+/** One collection's provenance in the machine-readable view. */
+export interface ListedCollectionJson {
+  readonly name: string;
+  readonly source: string;
+  readonly scope: InstallScope;
+  readonly ref: string;
+  readonly commit: string;
+  readonly manifestHash: string;
+  readonly only?: readonly string[];
+}
+
 /**
  * The machine-readable view. Provenance the human output drops (ref, commit,
  * manifest hash, only) stays here, because a script diffing an update needs it.
@@ -157,7 +180,7 @@ export function toJsonList(
   collections: readonly (readonly [string, CollectionLockEntry])[],
   entries: readonly ListedEntry[]
 ): {
-  collections: readonly Record<string, unknown>[];
+  collections: readonly ListedCollectionJson[];
   skills: readonly ListedEntryJson[];
 } {
   return {
