@@ -94,18 +94,26 @@ kitcrate only removes skills it installed itself.
 
 ### `kitcrate create` flow
 
-1. Scan the folder for directories containing `SKILL.md` (reuse `skills` discovery).
+1. Discover skills with the `skills` CLI's own discovery (`resolveSource` on the local directory). Never hand-roll a scan or parse `SKILL.md` frontmatter.
 2. Validate each; show errors.
-3. Multi-select skills to include.
-4. Prompt for name, description, visibility (default **private**; confirm explicitly if public).
+3. Prompt for name, description, visibility (default **private**; confirm explicitly if public).
+4. Multi-select skills to include: space toggles, Enter finalizes.
 5. Write a `.gitignore` that ignores `.env` and `.env.*` but keeps `!.env.example`.
 6. Scan selected skills for secrets before anything is written.
 7. Write `collection.json`. Default mode is references; offer "copy skills into the repo" as an option.
 8. `git init`, then stage only `collection.json`, `.gitignore`, and the selected skill folders. Never `git add .`.
-9. Publish gate: unstage credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) so they stay on disk but are never pushed; scan the contents of every tracked file; refuse to publish when the repository's existing history already contains a credential file.
+9. Publish gate: unstage credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) so they stay on disk but are never pushed; scan the contents of every tracked file; refuse to publish when the repository's existing history already contains a credential file; refuse when the repository already has staged changes, because the commit takes the whole index.
 10. Commit, tag `v0.1.0`.
 11. `gh repo create <name> --<visibility> --source . --push`.
 12. Print the install command: `kitcrate add github:<user>/<name>`.
+
+### Collection name convention
+
+- Names are lowercase, alphanumeric, with hyphens between segments: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`.
+- Author input is **parsed** into that convention by `normalizeCollectionName` in `src/core/name.ts`: trimmed, lowercased, whitespace runs become hyphens, repeated and edge hyphens collapse.
+- Characters outside `[a-z0-9-]` are **not** guessed at. They raise the convention error and the prompt refuses the input.
+- The `collection.json` schema still rejects invalid names. Normalization happens only at the author prompt, so the published contract stays strict.
+- Under `--yes` and `--json`, the name comes from the source directory's folder name, normalized the same way.
 
 ## Security rules (non-negotiable)
 

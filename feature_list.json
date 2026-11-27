@@ -87,7 +87,7 @@
         "feat-002"
       ],
       "status": "done",
-      "evidence": "src/commands/validate.ts: validate collection.json + skill references; src/commands/create.ts: recursive skill discovery (.agents/skills/<name>/SKILL.md etc.), publish gate (writes .gitignore, stages only collection.json+.gitignore+skill folders, unstages credential files, scans tracked content, blocks on credential-bearing history), secret scan, git init/commit/tag, gh repo create; typecheck clean"
+      "evidence": "src/commands/validate.ts: validate collection.json + skill references; src/commands/create.ts: skill discovery via the skills CLI adapter, publish gate (writes .gitignore, stages only collection.json+.gitignore+selected skill folders, unstages credential files, scans tracked content, blocks on credential-bearing history, refuses a dirty index), secret scan, git init/commit/tag, gh repo create; typecheck clean"
     },
     {
       "id": "feat-010",
@@ -99,7 +99,37 @@
         "feat-008"
       ],
       "status": "done",
-      "evidence": "vitest configured; 44 unit tests pass (manifest, lockfile, hash, secrets, gitignore); pnpm typecheck clean; pnpm lint clean; pnpm build clean"
+      "evidence": "vitest configured; 67 unit and integration tests pass (manifest, lockfile, hash, secrets, gitignore, name normalization, skill discovery, create publish flow with a gh stub on PATH); pnpm typecheck clean; pnpm lint clean; pnpm build clean"
+    },
+    {
+      "id": "feat-011",
+      "name": "Collection name normalization",
+      "description": "Parse author-entered collection names into the lowercase-hyphen convention; unsupported characters raise the convention error",
+      "dependencies": [
+        "feat-009"
+      ],
+      "status": "done",
+      "evidence": "src/core/name.ts exports normalizeCollectionName returning a discriminated union (ok/name/changed or ok/reason); trims, lowercases, collapses whitespace runs and edge hyphens, rejects characters outside [a-z0-9-] with a message naming them; the collection.json schema is unchanged; 14 unit tests in test/name.test.ts"
+    },
+    {
+      "id": "feat-012",
+      "name": "Interactive skill picker",
+      "description": "Multi-select of discovered skills in create: space toggles, Enter finalizes; non-interactive runs select every skill",
+      "dependencies": [
+        "feat-009"
+      ],
+      "status": "done",
+      "evidence": "src/commands/create.ts uses @clack/prompts text/select/confirm/multiselect; every prompt handles cancellation (exit 130); the picker lists every discovered skill with its description and starts fully selected; --yes/--json/non-TTY skip the prompts and select all; verified in a pty that space toggles an entry off and Enter commits only the remaining skills"
+    },
+    {
+      "id": "feat-013",
+      "name": "skills CLI discovery reuse",
+      "description": "Replace kitcrate's hand-rolled skill scan and frontmatter parser with the skills CLI's own discovery",
+      "dependencies": [
+        "feat-009"
+      ],
+      "status": "done",
+      "evidence": "src/skills/index.ts exports discoverSkillsInDirectory built on resolveSource; the hand-rolled scanSkillDirectories/walkDirectory/readSkill are gone from create.ts; the adapter's isSkillsDiagnostic guard was fixed (the upstream isDiagnostic(error) with no codes always returned false) so an empty directory yields [] instead of escaping as a diagnostic; 4 discovery tests in test/create.test.ts"
     }
   ]
 }
