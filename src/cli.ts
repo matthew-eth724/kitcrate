@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { addCommand, ADD_USAGE } from './commands/add.js';
 import { installCommand, INSTALL_USAGE } from './commands/install.js';
 import { updateCommand, UPDATE_USAGE } from './commands/update.js';
@@ -137,6 +139,26 @@ export async function main(argv: string[]): Promise<number> {
   }
 }
 
-if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
+/**
+ * True when this module is the program the user started, rather than a module
+ * an importer loaded.
+ *
+ * Both sides are resolved through their real path: a package installed from the
+ * registry is run through a symlink in `node_modules/.bin`, so `argv[1]` names
+ * the symlink while `import.meta.url` names the file behind it. Comparing the
+ * two unresolved made the CLI do nothing when it was installed rather than run
+ * from a checkout. A path that cannot be resolved is compared as it stands, so
+ * this never throws.
+ */
+function isEntryPoint(argv1: string | undefined): boolean {
+  if (argv1 === undefined) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(argv1);
+  } catch {
+    return fileURLToPath(import.meta.url) === argv1;
+  }
+}
+
+if (isEntryPoint(process.argv[1])) {
   process.exitCode = await main(process.argv.slice(2));
 }

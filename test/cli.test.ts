@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'fs/promises';
+import { symlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
 import { main } from '../src/cli.js';
 
 /** Every command the CLI dispatches. */
@@ -58,5 +64,27 @@ describe('kitcrate <command> --help', () => {
 
     expect(code).toBe(1);
     expect(stderr).toContain('Usage: kitcrate add');
+  });
+});
+
+describe('the entry point', () => {
+  // The guard decides whether this module is the program the user started or
+  // a module an importer loaded. It is only observable from another process:
+  // in this one, import.meta.url names the test file. A package installed from
+  // the registry runs through a symlink in node_modules/.bin, so that is the
+  // case worth proving — it is the one that once made the published CLI do
+  // nothing at all.
+  it('runs when the built bundle is reached through a symlink', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kitcrate-entry-'));
+    const bundle = join(process.cwd(), 'dist', 'cli.js');
+    const link = join(dir, 'kitcrate');
+    try {
+      symlinkSync(bundle, link);
+      const run = spawnSync(process.execPath, [link, '--help'], { encoding: 'utf8' });
+      expect(run.status).toBe(0);
+      expect(run.stderr).toContain('Usage: kitcrate');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

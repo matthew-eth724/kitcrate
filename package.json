@@ -1,16 +1,39 @@
 {
   "name": "kitcrate",
-  "version": "0.1.0",
-  "description": "Collections layer on top of the skills CLI \u2014 install, update, and remove collections of agent skills from git repos.",
+  "version": "0.1.1",
+  "description": "Collections layer on top of the skills CLI - install, update, and remove collections of agent skills from git repos.",
   "license": "MIT",
   "type": "module",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
   "bin": {
     "kitcrate": "dist/cli.js"
   },
+  "files": [
+    "dist/"
+  ],
   "engines": {
     "node": ">=22.20.0"
   },
   "packageManager": "pnpm@12.23.0",
+  "keywords": [
+    "agent-skills",
+    "skills",
+    "claude-code",
+    "codex",
+    "ai-agents",
+    "coding-agents",
+    "collections",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matthew-eth724/kitcrate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/matthew-eth724/kitcrate/issues"
+  },
+  "homepage": "https://github.com/matthew-eth724/kitcrate#readme",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
@@ -18,7 +41,8 @@
     "lint": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "dependencies": {
     "@clack/core": "^1.6.0",
