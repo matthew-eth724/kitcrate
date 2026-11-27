@@ -11,6 +11,29 @@ import { listCommand } from '../src/commands/list.js';
 import { computeManifestHash } from '../src/core/hash.js';
 import type { CommandOptions } from '../src/core/options.js';
 
+/**
+ * What the `skills` package was asked to install, one entry per call. Empty
+ * unless a test sets `recordInstalls`, so every other test installs for real.
+ */
+const installCalls: Array<{ source: string; skills: readonly string[]; ref?: string }> = [];
+let recordInstalls = false;
+
+vi.mock('skills', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('skills')>();
+  return {
+    ...actual,
+    installSkills: ((source: string, options: { skills?: readonly string[]; ref?: string }) => {
+      if (!recordInstalls) return actual.installSkills(source, options);
+      installCalls.push({
+        source,
+        skills: options.skills ?? [],
+        ...(options.ref !== undefined && { ref: options.ref }),
+      });
+      return Promise.resolve({ source: {}, installed: [], skipped: [], failed: [] });
+    }) as typeof actual.installSkills,
+  };
+});
+
 /** Minimal collection.json with one skill, shared by the fixtures below. */
 const MANIFEST = {
   name: 'probe-collection',
@@ -275,6 +298,55 @@ describe('install scope', () => {
     expect(await skillLives(join(home, '.agents', 'skills'))).toBe(true);
   });
 
+  it('installs every member from the collection when each one names "."', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await writeSkill(join(collection, 'skills', 'beta'), 'beta');
+    await writeFile(
+      join(collection, 'collection.json'),
+      JSON.stringify({
+        ...MANIFEST,
+        skills: [
+          { source: '.', skill: 'alpha' },
+          { source: '.', skill: 'beta' },
+        ],
+      }),
+      'utf8'
+    );
+    git(collection, 'commit', '-qam', 'add beta');
+
+    const code = await run(project, () => addCommand([collection], options()));
+
+    expect(errors.mock.calls.map(String).join('\n')).toBe('');
+    expect(code).toBe(0);
+    // Both members installed, and the skills lock file records where each came from.
+    const lockfile = JSON.parse(await readFile(join(project, 'skills-lock.json'), 'utf8')) as {
+      skills: Record<string, { source: string }>;
+    };
+    expect(Object.keys(lockfile.skills).sort()).toEqual(['alpha', 'beta']);
+    expect(lockfile.skills['alpha']?.source).toBe('../collection');
+    expect(lockfile.skills['beta']?.source).toBe('../collection');
+    expect(log.mock.calls.map(String).join('\n')).toContain('Installed 2 skill(s)');
+  });
+
+  it('refuses a manifest that names a source it cannot install from', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    // A collection.json may not carry an absolute path, so this one never loads.
+    await writeFile(
+      join(collection, 'collection.json'),
+      JSON.stringify({
+        ...MANIFEST,
+        skills: [{ source: join(root, 'upstream'), skill: 'alpha' }],
+      }),
+      'utf8'
+    );
+
+    const code = await run(project, () => addCommand([collection], options()));
+
+    expect(code).toBe(1);
+    expect(await skillLives(join(project, '.agents', 'skills'))).toBe(false);
+  });
+
   it('restores a global collection into the home directory on install', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     await writeLockfileFor(project, 'global');
@@ -284,5 +356,78 @@ describe('install scope', () => {
     expect(code).toBe(0);
     expect(await skillLives(join(home, '.agents', 'skills'))).toBe(true);
     expect(await skillLives(join(project, '.agents', 'skills'))).toBe(false);
+  });
+});
+
+describe('member sources', () => {
+  it('installs an owner/repo member from that repo, at that member’s ref', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kitcrate-member-'));
+    const project = join(root, 'project');
+    const collection = join(root, 'collection');
+    await mkdir(project, { recursive: true });
+    await writeSkill(join(collection, 'skills', 'alpha'), 'alpha');
+    await writeFile(
+      join(collection, 'collection.json'),
+      JSON.stringify({
+        name: 'probe-collection',
+        version: '0.1.0',
+        description: 'A collection whose members name their own repositories',
+        skills: [
+          { source: '.', skill: 'alpha' },
+          { source: 'acme/webtools', skill: 'account-activity' },
+          { source: 'acme/webtools', skill: 'portfolio' },
+          { source: 'other/skills', skill: 'burp-notes', ref: 'v2' },
+        ],
+      }),
+      'utf8'
+    );
+
+    const previousHome = process.env['HOME'];
+    const previousTelemetry = process.env['DISABLE_TELEMETRY'];
+    process.env['HOME'] = join(root, 'home');
+    process.env['DISABLE_TELEMETRY'] = '1';
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // The remote repositories are not reachable, so the install itself is
+    // recorded rather than performed; what this test proves is which source each
+    // member asks for.
+    recordInstalls = true;
+
+    const previous = process.cwd();
+    process.chdir(project);
+    try {
+      const code = await addCommand([collection], {
+        yes: true,
+        json: false,
+        debug: false,
+        global: false,
+      });
+      expect(errors.mock.calls.map(String).join('\n')).toBe('');
+      expect(code).toBe(0);
+    } finally {
+      recordInstalls = false;
+      process.chdir(previous);
+      if (previousHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = previousHome;
+      if (previousTelemetry === undefined) delete process.env['DISABLE_TELEMETRY'];
+      else process.env['DISABLE_TELEMETRY'] = previousTelemetry;
+      await rm(root, { recursive: true, force: true });
+    }
+
+    // Two members from one repository went out in one call; the collection's own
+    // member from the collection; the member with its own ref at that ref.
+    expect(installCalls).toContainEqual({ source: collection, skills: ['alpha'] });
+    expect(installCalls).toContainEqual({
+      source: 'acme/webtools',
+      skills: ['account-activity', 'portfolio'],
+    });
+    expect(installCalls).toContainEqual({
+      source: 'other/skills',
+      skills: ['burp-notes'],
+      ref: 'v2',
+    });
+    expect(installCalls).toHaveLength(3);
   });
 });

@@ -1,6 +1,7 @@
 import { readLockfile } from '../core/lockfile.js';
 import { resolveCollection, type ResolvedManifest } from '../core/resolve.js';
-import { installCollectionSkills, listInstalledSkills } from '../skills/index.js';
+import { installMembers, MemberInstallError } from '../core/install-members.js';
+import { listInstalledSkills } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
 /** Usage text for `kitcrate install`. */
@@ -74,19 +75,21 @@ export async function installCommand(_argv: string[], options: CommandOptions): 
 
       let skillsRestored = 0;
       if (skillsToInstall.length > 0) {
-        const result = await installCollectionSkills(entry.source, {
-          skills: skillsToInstall,
-          scope: entry.scope,
-          mode: 'auto',
-        });
-        // The `skills` API reports one entry per agent, so count distinct names.
-        skillsRestored = new Set(result.installed.map((member) => member.name)).size;
-        if (result.failed.length > 0) {
-          for (const failure of result.failed) {
-            console.error(`Failed to install skill "${failure.name}": ${failure.message}`);
-          }
+        let installedNames: readonly string[];
+        try {
+          const result = await installMembers(resolved, {
+            scope: entry.scope,
+            only: skillsToInstall,
+            cwd,
+          });
+          installedNames = result.installed.map((member) => member.name);
+        } catch (error) {
+          if (!(error instanceof MemberInstallError)) throw error;
+          console.error(error.message);
           return 1;
         }
+        // The `skills` API reports one entry per agent, so count distinct names.
+        skillsRestored = new Set(installedNames).size;
       }
 
       restored.push({

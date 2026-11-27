@@ -81,6 +81,7 @@ export interface ListedSkill {
   readonly agents: readonly string[];
   /** The same agents by display name, e.g. `Claude Code`, in the same order. */
   readonly agentNames: readonly string[];
+  /** Source the skill came from, as the lock file records it. */
   readonly source?: string;
 }
 
@@ -106,6 +107,8 @@ export interface AdapterOptions {
 export interface InstallCollectionOptions extends AdapterOptions {
   /** Skill names to install. Defaults to all skills in the source. */
   readonly skills?: readonly string[];
+  /** Branch, tag, or commit SHA to install at. Defaults to the source's default branch. */
+  readonly ref?: string;
   /** Agents to install into. Defaults to detected agents. */
   readonly agents?: readonly string[];
   /** Install scope. Defaults to 'project'. */
@@ -203,6 +206,7 @@ export async function installCollectionSkills(
     mode: options.mode ?? 'auto',
     skills: options.skills,
     agents: options.agents,
+    ...(options.ref !== undefined && { ref: options.ref }),
     lockfile: true,
   } as SkillsInstallOptions);
 

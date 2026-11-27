@@ -5,13 +5,10 @@ import {
   type CollectionLockEntry,
   type Lockfile,
 } from '../core/lockfile.js';
+import { installMembers, MemberInstallError } from '../core/install-members.js';
 import { resolveCollection } from '../core/resolve.js';
 import { DEFAULT_SCOPE, scopeDirectory, type InstallScope } from '../core/scope.js';
-import {
-  installCollectionSkills,
-  listInstalledSkills,
-  type InstalledMember,
-} from '../skills/index.js';
+import { listInstalledSkills, type InstalledMember } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
 /** Exit code for a cancelled prompt, matching `create`. */
@@ -93,21 +90,22 @@ export async function addCommand(argv: string[], options: CommandOptions): Promi
       );
     }
 
-    // 7. Install member skills via skills (only those not preexisting).
+    // 7. Install member skills via skills (only those not preexisting), each
+    // from the source its manifest entry names.
     const skillsToInstall = requestedSkills.filter((name) => !preexisting.includes(name));
 
     let installed: InstalledMember[] = [];
     if (skillsToInstall.length > 0) {
-      const result = await installCollectionSkills(source, {
-        skills: skillsToInstall,
-        scope,
-        mode: 'auto',
-      });
-      installed = [...result.installed];
-      if (result.failed.length > 0) {
-        for (const failure of result.failed) {
-          console.error(`Failed to install skill "${failure.name}": ${failure.message}`);
-        }
+      try {
+        const result = await installMembers(resolved, {
+          scope,
+          only: skillsToInstall,
+          cwd,
+        });
+        installed = [...result.installed];
+      } catch (error) {
+        if (!(error instanceof MemberInstallError)) throw error;
+        console.error(error.message);
         return 1;
       }
     }

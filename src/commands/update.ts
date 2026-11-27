@@ -5,7 +5,8 @@ import {
   type Lockfile,
 } from '../core/lockfile.js';
 import { resolveCollection, type ResolvedManifest } from '../core/resolve.js';
-import { installCollectionSkills, removeCollectionSkills } from '../skills/index.js';
+import { installMembers, MemberInstallError } from '../core/install-members.js';
+import { removeCollectionSkills } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
 /** Usage text for `kitcrate update`. */
@@ -130,17 +131,17 @@ export async function updateCommand(argv: string[], options: CommandOptions): Pr
         }
       }
 
-      // Install newly added skills.
+      // Install newly added skills, each from the source its own entry names.
       if (skillsAdded.length > 0) {
-        const result = await installCollectionSkills(entry.source, {
-          skills: skillsAdded,
-          scope: entry.scope,
-          mode: 'auto',
-        });
-        if (result.failed.length > 0) {
-          for (const failure of result.failed) {
-            console.error(`Failed to install skill "${failure.name}": ${failure.message}`);
-          }
+        try {
+          await installMembers(resolved, {
+            scope: entry.scope,
+            only: skillsAdded,
+            cwd,
+          });
+        } catch (error) {
+          if (!(error instanceof MemberInstallError)) throw error;
+          console.error(error.message);
           return 1;
         }
       }
