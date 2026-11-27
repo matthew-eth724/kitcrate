@@ -211,3 +211,17 @@ export function sortedCollections(
 ): readonly (readonly [string, CollectionLockEntry])[] {
   return Object.entries(lockfile.collections).sort(([a], [b]) => a.localeCompare(b));
 }
+
+/**
+ * The scopes the listing has to read. A collection's members are matched in the
+ * scope the collection was installed at, so a scope no collection uses holds
+ * nothing this listing can show. Reading the global scope is the expensive
+ * half: it holds a copy of every skill for every agent on the machine.
+ */
+export function scopesToRead(
+  collections: readonly (readonly [string, CollectionLockEntry])[]
+): 'project' | 'global' | 'all' {
+  const scopes = new Set(collections.map(([, entry]) => entry.scope));
+  if (scopes.size === 1) return scopes.has('global') ? 'global' : 'project';
+  return 'all';
+}

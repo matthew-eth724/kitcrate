@@ -6,6 +6,7 @@ import {
   formatAgents,
   formatEntry,
   formatList,
+  scopesToRead,
   toJsonList,
   type InstalledSkill,
 } from '../src/core/listing.js';
@@ -172,5 +173,14 @@ describe('list formatting', () => {
     expect(view.skills).toHaveLength(1);
     expect(view.skills[0]?.agents[0]).toEqual({ id: 'claude-code', name: 'Claude Code' });
     expect(view.collections[0]).toMatchObject({ commit: '9f3a1c2dedbeef', ref: 'v1' });
+  });
+
+  it('reads only the scopes the collections use', () => {
+    const project = [['web-security', collection()]] as const;
+    const global = [['web-security', collection({ scope: 'global' })]] as const;
+
+    expect(scopesToRead(project)).toBe('project');
+    expect(scopesToRead(global)).toBe('global');
+    expect(scopesToRead([...project, ...global])).toBe('all');
   });
 });

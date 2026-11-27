@@ -3,6 +3,7 @@ import { readLockfile } from '../core/lockfile.js';
 import {
   buildListedEntries,
   formatList,
+  scopesToRead,
   sortedCollections,
   toJsonList,
   type InstalledSkill,
@@ -34,7 +35,7 @@ export async function listCommand(_argv: string[], options: CommandOptions): Pro
     }
 
     const installed = await withProgress(json, 'Reading installed skills', () =>
-      listInstalledSkills({ cwd })
+      listInstalledSkills({ cwd, scope: scopesToRead(collections) })
     );
     const entries = buildListedEntries(collections, installed satisfies readonly InstalledSkill[]);
 

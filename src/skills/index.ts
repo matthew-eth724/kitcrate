@@ -231,15 +231,26 @@ export async function installCollectionSkills(
   };
 }
 
+/** Options for listing installed skills. */
+export interface ListInstalledOptions extends AdapterOptions {
+  /**
+   * Which scopes to read. Both scopes by default, because the add and install
+   * paths need to spot a skill that already exists in the other scope. Reading
+   * one scope is much cheaper: the global scope holds a copy of every skill for
+   * every agent on the machine.
+   */
+  readonly scope?: 'project' | 'global' | 'all';
+}
+
 /** List installed skills with source provenance from the lock file. */
 export async function listInstalledSkills(
-  options: AdapterOptions = {}
+  options: ListInstalledOptions = {}
 ): Promise<readonly ListedSkill[]> {
   const result = await listSkills({
     cwd: options.cwd,
     signal: options.signal,
     onWarning: options.onWarning,
-    scope: 'all',
+    scope: options.scope ?? 'all',
   } as SkillsListOptions);
 
   return result.skills.map((s) => ({
