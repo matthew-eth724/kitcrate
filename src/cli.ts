@@ -9,6 +9,7 @@ import { listCommand, LIST_USAGE } from './commands/list.js';
 import { validateCommand, VALIDATE_USAGE } from './commands/validate.js';
 import { createCommand, CREATE_USAGE } from './commands/create.js';
 import { publishCommand, PUBLISH_USAGE } from './commands/publish.js';
+import { checkTools, missingToolsMessage } from './core/tools.js';
 import type { CommandOptions } from './core/options.js';
 
 type CommandHandler = (argv: string[], opts: CommandOptions) => Promise<number>;
@@ -124,6 +125,16 @@ export async function main(argv: string[]): Promise<number> {
   if (commandArgs.includes('--help') || commandArgs.includes('-h')) {
     console.error(command.usage);
     return 0;
+  }
+
+  // A command that shells out to a missing program would otherwise fail partway
+  // through, after committing or after reaching for the network, with whatever
+  // the missing program left behind. Ask first, and answer plainly.
+  const tools = await checkTools(name);
+  const toolMessage = missingToolsMessage(name, tools);
+  if (toolMessage !== null) {
+    console.error(toolMessage);
+    return 1;
   }
 
   try {
