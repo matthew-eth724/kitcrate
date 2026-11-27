@@ -221,3 +221,26 @@ with their scope and the skill picker showed an empty box that became a green ti
 Open, and worth knowing: the global candidate list costs about 8 seconds, because the `skills`
 API scans every agent's directory to read the global lockfile. The command shows the loading
 indicator while it waits.
+
+## feat-018 — `validate` understands a `.` member (done)
+
+`kitcrate validate` warned on every collection `kitcrate create` publishes. A member whose source
+is `.` is what `create` writes for a skill that lives in the collection itself, but the validator
+passed the bare `.` to `resolveCollection`, which rejects it as an invalid collection source. The
+warning was false and appeared on every published collection.
+
+The validator in `src/commands/validate.ts` now classifies a member source: a source that is not
+a GitHub repository (`githubOwnerRepo` returns null) is local to the collection, so it is
+resolved against the directory holding the `collection.json` under validation instead of the
+network. A `.` member is in its own collection by definition, so it validates without a warning.
+The resolver in `src/core/resolve.ts` is unchanged, because it is shared with `add`, `install`,
+and `update`, which never feed it a bare `.` (they resolve the collection first and map `.` to its
+source in `src/core/members.ts`).
+
+`test/validate.test.ts` proves a `.` member validates clean and that an unreachable non-local
+source still warns. Commit `b300533`.
+
+Verification: `pnpm typecheck`, `pnpm lint`, `pnpm test` (204 passed, 19 files), `pnpm build`.
+On the real artifact, the exact repro from the report (a collection whose member has source `.`)
+now reports `collection.json is valid` with zero warnings; an unreachable `owner/repo` member
+still warns as before.

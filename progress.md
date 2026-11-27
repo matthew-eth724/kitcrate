@@ -248,3 +248,19 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
     so the push had no branch to send; a non-interactive run with several collections installed
     published the first one without saying so; and an installed skill with no folder was
     reported as changed but never copied.
+
+- feat-018 (done): `kitcrate validate` understands a `.` member.
+  - `kitcrate validate` warned on every collection `kitcrate create` publishes. A member whose
+    source is `.` is what `create` writes for a skill that lives in the collection itself, but
+    the validator passed the bare `.` to `resolveCollection`, which rejects it as an invalid
+    collection source. The warning was false and appeared on every published collection.
+  - The validator in `src/commands/validate.ts` now classifies a member source. A source that is
+    not a GitHub repository (`githubOwnerRepo` returns null) is local to the collection, so it is
+    resolved against the directory holding the `collection.json` under validation instead of the
+    network. A `.` member, being in its own collection by definition, validates without a warning.
+  - The resolver in `src/core/resolve.ts` is unchanged: it is shared with `add`, `install`, and
+    `update`, which never feed it a bare `.` as a source (they resolve the collection first and
+    map `.` to its source in `src/core/members.ts`). Widening `parseSource` would have risked
+    those callers.
+  - `test/validate.test.ts` proves a `.` member validates clean and that a non-local source that
+    cannot be reached still warns, so the remote path is untouched.
