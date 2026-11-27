@@ -264,3 +264,20 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
     those callers.
   - `test/validate.test.ts` proves a `.` member validates clean and that a non-local source that
     cannot be reached still warns, so the remote path is untouched.
+
+- Released on npm (0.1.1): kitcrate is published. `npm install -g kitcrate` gives the
+  `kitcrate` binary, and a plain `npm install kitcrate` in a project does too.
+  - `package.json` now declares what the registry and a consumer need: `files: ["dist/"]` so
+    only the built CLI ships and the source, tests, and agent docs stay in the repository;
+    `main`, `types`, the `repository`, `bugs`, and `homepage` URLs, keywords, and `license: MIT`.
+    `prepublishOnly` runs typecheck, lint, test, and build, so a broken tree cannot be published.
+  - **0.1.0 shipped broken: the installed package did nothing.** The entry-point guard in
+    `src/cli.ts` compared `import.meta.url`'s pathname with `process.argv[1]` literally. npm links
+    a bin into `node_modules/.bin`, so the installed CLI starts through a symlink: `argv[1]` names
+    the symlink, while `import.meta.url` names the file behind it. The two never matched, `main()`
+    never ran, and `kitcrate --help` exited 0 printing nothing. Running from a checkout hid it,
+    because there `argv[1]` is the real file.
+  - Fixed in 0.1.1: both sides are resolved through `realpathSync` before comparing, which also
+    fixes a percent-encoded pathname for a directory with a space in its name. `test/cli.test.ts`
+    runs the built bundle through a symlink in a subprocess, so the case an install creates is the
+    case the suite checks.
