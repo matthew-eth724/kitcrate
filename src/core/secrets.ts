@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'fs/promises';
-import { join, relative } from 'path';
+import { basename, join, relative } from 'path';
+import { listTrackedFiles, unstagePath } from '../git/index.js';
 
 /** A secret found while scanning. */
 export interface SecretFinding {
@@ -189,4 +190,21 @@ export async function scanFilesForSecrets(
   }
   findings.sort((a, b) => a.path.localeCompare(b.path));
   return { findings, clean: findings.length === 0 };
+}
+
+/**
+ * Remove credential files from a repository's git index so they stay on disk
+ * but are never pushed, and report which paths were excluded.
+ *
+ * This is the publish gate both `create` and `publish` run: the exclusion is
+ * what keeps a credential out of the remote, so it belongs beside the rules
+ * that decide what a credential is.
+ */
+export async function excludeCredentialFiles(repoDir: string): Promise<string[]> {
+  const tracked = await listTrackedFiles(repoDir);
+  const credentialFiles = tracked.filter((path) => isCredentialFileName(basename(path)));
+  for (const path of credentialFiles) {
+    await unstagePath(repoDir, path);
+  }
+  return credentialFiles;
 }
