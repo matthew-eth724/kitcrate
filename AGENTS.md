@@ -97,7 +97,7 @@ kitcrate only removes skills it installed itself.
 1. Discover skills with the `skills` CLI's own discovery (`resolveSource` on the local directory). Never hand-roll a scan or parse `SKILL.md` frontmatter.
 2. Validate each; show errors.
 3. Prompt for name, description, visibility (default **private**; confirm explicitly if public).
-4. Multi-select skills to include: space toggles, Enter finalizes.
+4. Multi-select skills to include: space toggles, Enter finalizes. The list shows skill names only, each with an empty box that becomes a green tick when ticked.
 5. Write a `.gitignore` that ignores `.env` and `.env.*` but keeps `!.env.example`.
 6. Scan selected skills for secrets before anything is written.
 7. Write `collection.json`. Default mode is references; offer "copy skills into the repo" as an option.
@@ -138,6 +138,7 @@ src/
     lockfile.ts   # kitcrate-lock.json read/write/verify
     resolve.ts    # fetch collection.json at ref -> commit SHA
     hash.ts       # manifestHash
+    name.ts       # collection name normalization
     secrets.ts    # pre-publish scanner
   skills/         # the only module that imports from `skills`
   git/            # thin wrappers around git and gh

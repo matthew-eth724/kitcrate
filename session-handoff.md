@@ -22,6 +22,7 @@
 - [x] Made `create --json` emit machine-readable output, as AGENTS.md requires for every command
 - [x] Added a dirty-index guard: the commit takes the whole index, so pre-staged files would have been published
 - [x] Warned when a selected skill lives at the source root, because the whole directory is then published
+- [x] feat-014 Picker presentation: names only in the list, an empty box that becomes a green tick when ticked
 - [x] Updated AGENTS.md, feature_list.json, progress.md, and this handoff
 
 ## Verification Evidence
@@ -36,6 +37,7 @@
 | Interactive picker | pty harness in `/tmp/pty_drive.py` | pass | typed `My Web Security` -> `my-web-security`; space toggled `beta` off; the commit held only `alpha` and `gamma` |
 | Convention error | pty harness | pass | `my_collection` blocked inline with `Unsupported: "_"`; nothing published |
 | Dirty index | `create --yes` over a repo with a staged file | pass | exit 1, nothing committed, the author's index left intact |
+| Checkbox rendering | pty harness, raw bytes | pass | unticked `ESC[2m` empty box, ticked `ESC[32m` green tick; list scrolls in a 12-row terminal |
 
 ## Files Changed
 
@@ -44,6 +46,7 @@
 - `src/skills/index.ts`
 - `src/git/index.ts`
 - `src/cli.ts`
+- `src/commands/pick-skills.ts` (new)
 - `test/name.test.ts` (new)
 - `test/create.test.ts`
 - `package.json`, `pnpm-lock.yaml`
@@ -58,6 +61,7 @@
 - All prompts moved to `@clack/prompts`. `readline` and clack's multiselect fight over stdin raw mode.
 - A skill at the source root is the whole directory, matching how upstream `skills` copies a skill folder. kitcrate warns instead of silently publishing extra files.
 - Pre-staged content makes `create` refuse rather than publish. Refusing is the safer default and matches the command's existing fail-loudly posture.
+- clack hardcodes its checkbox symbols, so the picker draws itself on top of `@clack/core`'s `MultiSelectPrompt`. Only the rendering is custom; the keyboard handling is still clack's.
 
 ## Blockers / Risks
 

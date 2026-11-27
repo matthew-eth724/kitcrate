@@ -25,6 +25,7 @@
 - [x] feat-011 Collection name normalization: `src/core/name.ts`, author input parsed into the lowercase-hyphen convention, unsupported characters raise the convention error
 - [x] feat-012 Interactive skill picker: `@clack/prompts` multiselect in `create`, space toggles and Enter finalizes, non-interactive runs select every skill
 - [x] feat-013 skills CLI discovery reuse: hand-rolled scan and frontmatter parser replaced by `discoverSkillsInDirectory`; broken `isSkillsDiagnostic` guard fixed
+- [x] feat-014 Picker presentation: skill list shows names only, and each row shows an empty box that becomes a green tick when ticked
 
 ### What's In Progress
 
@@ -48,6 +49,7 @@
 - All prompts in `create` moved from `readline` to `@clack/prompts` so one library owns stdin and raw-mode handling; mixing the two breaks the multiselect.
 - The `create` commit takes the whole git index, so the command now refuses to publish when the repository already has staged changes rather than silently publishing the author's files.
 - `gh` now goes through a `gh()` wrapper in `src/git/index.ts`, matching AGENTS.md's "thin wrappers around git and gh".
+- The picker draws itself. clack hardcodes its checkbox symbols, so `src/commands/pick-skills.ts` builds on `@clack/core`'s `MultiSelectPrompt` for the keyboard handling and renders the list with an empty box and a green tick.
 
 ## Files Modified This Session
 
@@ -56,6 +58,8 @@
 - `src/skills/index.ts` (`discoverSkillsInDirectory`, fixed `isSkillsDiagnostic`)
 - `src/git/index.ts` (`gh()` wrapper, `listStagedChanges()`)
 - `src/cli.ts` (`--allow-secrets` in the usage text)
+- `src/commands/pick-skills.ts` (new, custom checkbox rendering)
+- `package.json`, `pnpm-lock.yaml` (`@clack/core` dependency)
 - `test/name.test.ts` (new, 14 cases)
 - `test/create.test.ts` (8 cases: discovery plus the publish flow with a `gh` stub on PATH)
 - `package.json`, `pnpm-lock.yaml` (`@clack/prompts` dependency)
