@@ -195,3 +195,30 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
     expensive half: it holds a copy of every skill for every agent on the machine. On this
     machine that is 7.9 s against 68 ms for the project scope, and the listing waited for all
     of it. A project-only listing is now about a second, most of it the CLI's own start-up.
+
+- feat-020 (done): each member skill is installed from the source its manifest entry names.
+  - `src/core/source.ts` turns a source into its GitHub `owner/repo` form (`owner/repo`,
+    `github:owner/repo`, `https://github.com/...`, `git@github.com:...`, with or without a
+    trailing `@ref`) and returns null for a local path or another host, so nothing guesses a
+    repository. `displaySource` leaves an unparseable source as it is.
+  - `kitcrate create` writes that form into `collection.json` for each selected skill, read
+    through `listInstalledSkills` (the `skills` lock file). A skill with no recorded GitHub
+    source records `.` and the command says which ones fell back and why.
+  - `src/core/members.ts` groups a manifest's members by source and ref; `.` maps to the
+    collection's own source and ref. `src/core/install-members.ts` is the one installer that
+    `add`, `install`, and `update` call, so they cannot drift. `installCollectionSkills` now
+    takes a `ref` and passes it upstream.
+  - `kitcrate list` shows both `Collection:` and `Source:` as `owner/repo`. The JSON keeps the
+    raw source, which mirrors the lock file.
+  - The `withProgress` spinner moved out of `list.ts` into `src/commands/progress.ts`, next to
+    the other terminal helper; `create` uses it for the lock file read, which scans every agent
+    directory (about 7 s here).
+  - The source lookup prefers an attributed copy over one that records no source, so a skill
+    that sits in both scopes still names the repository it came from.
+  - The collection's own source is handed to the installer in its normalized form, without
+    the ref the user wrote after it: the `skills` package reads a trailing `@name` as a skill
+    filter, so `owner/repo@v1` would look for a skill called `v1`.
+  - `test/add.test.ts` replaces `installSkills` through `vi.mock` when a test sets
+    `recordInstalls`, so the member-source test records what was asked for instead of fetching
+    a remote repository. The create suite stubs the installed-skill lookup for the same reason
+    and because the real machine's lock files would otherwise decide the result.

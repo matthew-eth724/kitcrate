@@ -137,3 +137,45 @@ Commits: `fc7aadf` the listing itself, `1772fa0` one renderer and a spinner that
 Verification: `pnpm typecheck`, `pnpm lint`, `pnpm test` (125 passed, 11 files), `pnpm build`.
 Checked on the real artifact in a pty: the format, the colours, the spinner, the `~`
 abbreviation, the `+N more` truncation, and a project listing next to a global one.
+
+## feat-020 — a member skill keeps its own source (done)
+
+A manifest entry names where its skill comes from, and may pin a ref for it. Nothing honoured
+that: `kitcrate create` wrote `source: '.'` for every skill, `add`/`install`/`update` installed
+every member from the collection's own repo, and the skills lock file therefore recorded the
+collection as the source of every member. So `kitcrate list` showed the collection's repo where
+the skill's own repo belonged.
+
+- `src/core/source.ts` turns a source into its GitHub `owner/repo` form (`owner/repo`,
+  `github:owner/repo`, an https or ssh GitHub URL, with or without a trailing `@ref`) and returns
+  null for a local path or another host, so nothing guesses a repository. `displaySource` leaves
+  an unparseable source as it is.
+- `src/core/member-sources.ts` reads the lock file through the `skills` API and names the
+  repository each selected skill came from. A copy with no source of its own does not hide the
+  source another copy names; two copies naming different repositories do.
+- `kitcrate create` writes that `owner/repo` into `collection.json`. A skill it cannot attribute
+  records `.`, and the command says which ones and why.
+- `src/core/members.ts` groups a manifest's members by source and ref; `.` maps to the
+  collection's own source and ref. `src/core/install-members.ts` is the one installer that
+  `add`, `install`, and `update` call. `installCollectionSkills` takes a `ref` and passes it
+  upstream.
+- The collection's own source reaches the installer normalized, without the ref the user wrote
+  after it: the `skills` package reads a trailing `@name` as a skill filter, so `owner/repo@v1`
+  would look for a skill called `v1`.
+- `kitcrate list` shows both `Collection:` and `Source:` as `owner/repo`. The JSON keeps the raw
+  source, which mirrors the lock file.
+- The delayed spinner moved out of `list.ts` into `src/commands/progress.ts`, next to the other
+  terminal helper. `create` uses it for the lock file read, which scans every agent's directory
+  (about 7 s on this machine).
+
+Commits: `db8dd7b` the source parser, `f61cddf` the installer honouring the manifest, `c8ce2c2`
+create recording the source, `eaa08f7` the listing showing it.
+
+Verification: `pnpm typecheck`, `pnpm lint`, `pnpm test` (153 passed, 14 files), `pnpm build`.
+Checked on the real artifact: `kitcrate create` wrote `"source": "acme/webtools"` for a skill
+whose lock file entry names that repository, and the listing rendered
+`Collection: matt711/mywebskills` and `Source: acme/webtools`, with the JSON keeping both raw.
+
+Open, and worth knowing: the project `skills-lock.json` is version 2 and the global
+`~/.agents/.skill-lock.json` is version 3. A fixture written at the wrong version is silently
+read as empty, so a source looks "not recorded".

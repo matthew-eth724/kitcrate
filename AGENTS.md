@@ -83,6 +83,32 @@ Keep the entry shape (`source`, `skill`, optional `ref`) aligned with skills.sh 
 | `kitcrate create` | Publish flow (below) |
 | `kitcrate validate [path]` | Check `collection.json` and referenced skills |
 
+### Where a member skill comes from
+
+A manifest entry names where its skill comes from, and may pin a ref for it:
+
+```json
+{ "source": "acme/web-security", "skill": "xss-review", "ref": "v2" }
+```
+
+That source is the skill's **own** repository, not the collection's. The flow that keeps it honest:
+
+1. **`kitcrate create`** reads the lock file the `skills` CLI wrote when the author installed the
+   skill, and records that skill's own `owner/repo` in the manifest. The manifest schema refuses a
+   URL, so the source is parsed into `owner/repo` first. A skill kitcrate cannot attribute
+   records `.`, which installs it from the collection itself.
+2. **`kitcrate add`**, **`kitcrate install`**, and **`kitcrate update`** install each member from
+   the source its manifest entry names, at the ref that entry names. Members sharing a source and
+   a ref go out in one call. `src/core/members.ts` groups them and `src/core/install-members.ts`
+   is the one installer, so the three commands cannot disagree.
+3. **`kitcrate list`** shows that source. The `skills` lock file records it, so the listing's
+   `Source:` line is the skill's original repository.
+
+A member named `.` (or any relative path) comes from the collection itself, at the collection's
+ref. The collection's own source is passed to the installer in its normalized form, without the
+ref the user wrote after it, because the `skills` package reads a trailing `@name` as a skill
+filter: `owner/repo@v1` would look for a skill called `v1`.
+
 ### The listing
 
 `kitcrate list` is a listing of skills, not of collections. One entry per (collection, skill)
@@ -91,6 +117,8 @@ installed for, the collection that brought it, and the source the skill itself c
 
 - The collection's `ref`, `commit`, `manifestHash`, and `only` stay out of the human output.
   They stay in the JSON, which is the machine-readable view.
+- The `Collection:` and `Source:` lines show a GitHub source as `owner/repo`. A local path or
+  another host's URL is shown as it is, rather than guessed at. The JSON keeps the raw source.
 - An installed skill is matched by name **and** scope. The adapter lists both scopes, so a
   global skill that shares a name with a project member would otherwise lend its path and
   source to a copy the collection never installed.
