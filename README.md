@@ -6,6 +6,14 @@
   <a href="https://github.com/matthew-eth724/kitcrate/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/matthew-eth724/kitcrate"></a>
 </p>
 
+<p align="center">
+  <img alt="Claude Code" src="https://img.shields.io/static/v1?label=&message=Claude%20Code&color=8b949e&style=flat-square">
+  <img alt="Codex" src="https://img.shields.io/static/v1?label=&message=Codex&color=8b949e&style=flat-square">
+  <img alt="Hermes Agent" src="https://img.shields.io/static/v1?label=&message=Hermes%20Agent&color=8b949e&style=flat-square">
+  <img alt="OpenClaw" src="https://img.shields.io/static/v1?label=&message=OpenClaw&color=8b949e&style=flat-square">
+  <img alt="Pi" src="https://img.shields.io/static/v1?label=&message=Pi&color=8b949e&style=flat-square">
+</p>
+
 The `skills` CLI installs individual skills but has no notion of a *collection*. kitcrate adds one: author a collection, publish it to GitHub, install the whole set into a project with one command, and keep it updated as the collection grows.
 
 Git is the backend — no server, no registry. GitHub access goes through the `gh` CLI, never a custom OAuth flow.
