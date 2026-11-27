@@ -139,7 +139,7 @@
         "feat-012"
       ],
       "status": "done",
-      "evidence": "src/commands/pick-skills.ts builds on @clack/core's MultiSelectPrompt for the keyboard handling and draws the list itself, because clack hardcodes its checkbox symbols; verified in a pty that an unticked row renders a dim empty box (ESC[2m) and a ticked row a green tick (ESC[32m), that descriptions are gone, and that the list scrolls in a short terminal"
+      "evidence": "src/commands/pick-skills.ts builds on @clack/core's MultiSelectPrompt for the keyboard handling and draws the list itself, because clack hardcodes its checkbox symbols; every box starts empty (initialValues is empty) and the header shows the running count; verified in a pty that an unticked row renders a dim empty box (ESC[2m), a ticked row a green tick (ESC[32m), that descriptions are gone, that the list scrolls in a short terminal, and that confirming with nothing ticked exits 1 without publishing"
     }
   ]
 }

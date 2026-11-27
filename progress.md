@@ -25,7 +25,7 @@
 - [x] feat-011 Collection name normalization: `src/core/name.ts`, author input parsed into the lowercase-hyphen convention, unsupported characters raise the convention error
 - [x] feat-012 Interactive skill picker: `@clack/prompts` multiselect in `create`, space toggles and Enter finalizes, non-interactive runs select every skill
 - [x] feat-013 skills CLI discovery reuse: hand-rolled scan and frontmatter parser replaced by `discoverSkillsInDirectory`; broken `isSkillsDiagnostic` guard fixed
-- [x] feat-014 Picker presentation: skill list shows names only, and each row shows an empty box that becomes a green tick when ticked
+- [x] feat-014 Picker presentation: skill list shows names only, every box starts empty, and ticking one turns it into a green tick; the header shows the running count
 
 ### What's In Progress
 
@@ -50,6 +50,7 @@
 - The `create` commit takes the whole git index, so the command now refuses to publish when the repository already has staged changes rather than silently publishing the author's files.
 - `gh` now goes through a `gh()` wrapper in `src/git/index.ts`, matching AGENTS.md's "thin wrappers around git and gh".
 - The picker draws itself. clack hardcodes its checkbox symbols, so `src/commands/pick-skills.ts` builds on `@clack/core`'s `MultiSelectPrompt` for the keyboard handling and renders the list with an empty box and a green tick.
+- No skill starts ticked. The author picks what goes into the collection; the non-interactive `--yes` and `--json` paths still take every skill, since "no questions asked" means no filtering.
 
 ## Files Modified This Session
 

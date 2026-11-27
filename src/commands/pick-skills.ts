@@ -44,27 +44,29 @@ function renderOption(label: string, ticked: boolean, focused: boolean): string 
  * toggles, enter confirms — and draws the list itself, because clack's own
  * multiselect hardcodes its checkbox symbols.
  *
+ * Every box starts empty. The user ticks the skills they want.
+ *
  * Returns null when the prompt was cancelled.
  */
 export async function pickSkills(
   message: string,
-  options: readonly PickOption[],
-  initialValues: readonly string[]
+  options: readonly PickOption[]
 ): Promise<string[] | null> {
   const prompt = new MultiSelectPrompt({
     options,
-    initialValues,
+    initialValues: [],
     required: false,
     render() {
       const withGuide = settings.withGuide;
+      const ticked = this.value ?? [];
+      const count = styleText('dim', ` (${ticked.length} selected)`);
       const title = wrapTextWithPrefix(
         process.stdout,
-        message,
+        `${message}${count}`,
         withGuide ? `${symbolBar(this.state)}  ` : '',
         `${symbol(this.state)}  `
       );
       const header = `${withGuide ? `${styleText('gray', S_BAR)}\n` : ''}${title}\n`;
-      const ticked = this.value ?? [];
 
       if (this.state === 'submit') {
         const chosen =

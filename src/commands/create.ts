@@ -358,8 +358,7 @@ async function collectInputs(context: {
 
   const selection = await pickSkills(
     'Select skills to include',
-    discovered.map((skill) => ({ value: skill.name, label: skill.name })),
-    discovered.map((skill) => skill.name)
+    discovered.map((skill) => ({ value: skill.name, label: skill.name }))
   );
   if (selection === null) return cancelled();
 
