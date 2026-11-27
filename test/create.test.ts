@@ -307,4 +307,22 @@ describe('createCommand', () => {
     expect(second.code).toBe(0);
     expect(await requestedRemote()).toBe('origin');
   });
+
+  it('retries a failed publish when the repository also holds untracked files', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await writeGhStub('#!/bin/sh\necho "X Could not reach GitHub" >&2\nexit 1\n');
+
+    expect((await runCreate(root)).code).toBe(1);
+    // An untracked file changes the wording git uses to refuse an empty
+    // commit, so the retry must not depend on reading that wording.
+    await writeFile(join(root, 'README.md'), 'notes\n', 'utf8');
+
+    await writeGhStub(GH_STUB);
+    const second = await runCreate(root);
+
+    expect(second.code).toBe(0);
+    // The author's own file was never swept into the collection.
+    const tracked = await git(['ls-files', '-z'], root);
+    expect(tracked.stdout).not.toContain('README.md');
+  });
 });

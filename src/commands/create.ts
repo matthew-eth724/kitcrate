@@ -6,6 +6,7 @@ import { ensureEnvIgnoreRules } from '../core/gitignore.js';
 import { type CollectionManifest } from '../core/manifest.js';
 import { computeManifestHash } from '../core/hash.js';
 import { normalizeCollectionName } from '../core/name.js';
+import { chooseRemoteName } from '../core/remote.js';
 import { discoverSkillsInDirectory, type DiscoveredSkill } from '../skills/index.js';
 import { pickSkills } from './pick-skills.js';
 import {
@@ -13,8 +14,10 @@ import {
   gh,
   hasCommits,
   listCommittedFiles,
+  listRemotes,
   listStagedChanges,
   listTrackedFiles,
+  resolveTagCommit,
   stagePaths,
   unstagePath,
 } from '../git/index.js';
@@ -52,6 +55,8 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
     const defaultName = deriveDefaultName(sourceDir);
     const defaultDescription = `Collection of ${discovered.length} skill(s)`;
 
+    // Steps 2 to 4: validate each skill, prompt for the collection's details,
+    // and choose which skills to include.
     const inputs = await collectInputs({
       discovered,
       nonInteractive: yes || json || !isInteractive(),
@@ -73,9 +78,10 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       );
     }
 
+    // Step 5: write the .gitignore.
     const gitignoreStatus = await ensureEnvIgnoreRules(sourceDir);
 
-    // 5. Write collection.json.
+    // Step 6. Write collection.json.
     const manifest: CollectionManifest = {
       name,
       version: '0.1.0',
@@ -91,8 +97,22 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
 
     await writeFile(join(sourceDir, 'collection.json'), collectionJson, 'utf8');
 
-    // 7. git init, then stage only what belongs in the collection.
-    await git(['init'], sourceDir);
+    // Step 7. git init, then stage only what belongs in the collection.
+    const initResult = await git(['init'], sourceDir);
+    if (initResult.code !== 0) {
+      const detail = initResult.stderr.trim() || initResult.stdout.trim();
+      console.error(`Failed to initialize a git repository in ${sourceDir}: ${detail}`);
+      return 1;
+    }
+
+    // The new repository's remote has to be a name `gh` can add. Decide it
+    // before the commit so a refusal leaves nothing behind.
+    const remoteChoice = chooseRemoteName(await listRemotes(sourceDir));
+    if (!remoteChoice.ok) {
+      console.error(remoteChoice.reason);
+      return 1;
+    }
+    const remote = remoteChoice.name;
 
     // The commit takes the whole index, so anything the author had already
     // staged would be published too. Refuse rather than publish their files.
@@ -111,7 +131,7 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
     const skillPaths = selectedSkills.map((skill) => skill.path);
     await stagePaths(sourceDir, ['collection.json', '.gitignore', ...skillPaths]);
 
-    // 8. Publish gate: nothing credential-shaped may reach the remote.
+    // Step 8. Publish gate: nothing credential-shaped may reach the remote.
     const excluded = await excludeCredentialFiles(sourceDir);
     if (excluded.length > 0) {
       say(json, `Excluded ${excluded.length} credential file(s) from the publish:`);
@@ -131,7 +151,8 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       }
     }
 
-    // 8. Warn when the history already holds credentials. Publishing is not
+    // Step 8, continued. Warn when the history already holds credentials.
+    // Publishing is not
     // blocked, but the author should know those commits go to the remote too.
     if (await hasCommits(sourceDir)) {
       const committed = await listCommittedFiles(sourceDir);
@@ -147,21 +168,47 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       }
     }
 
-    // 10. Commit and tag v0.1.0.
-    const commitResult = await git(
-      ['commit', '-m', `chore: initial collection ${name} v0.1.0`],
-      sourceDir
-    );
-    if (commitResult.code !== 0) {
-      console.error(`Failed to commit: ${commitResult.stderr.trim()}`);
-      return 1;
+    // Step 9. Commit and tag v0.1.0.
+    const tag = 'v0.1.0';
+    // A retry after a failed publish finds the collection already committed.
+    // Compare the index against HEAD instead of reading git's refusal, which
+    // comes out in the user's language and in more than one wording.
+    const alreadyCommitted =
+      (await git(['diff', '--cached', '--quiet', 'HEAD'], sourceDir)).code === 0;
+    if (!alreadyCommitted) {
+      const commitResult = await git(
+        ['commit', '-m', `chore: initial collection ${name} v0.1.0`],
+        sourceDir
+      );
+      if (commitResult.code !== 0) {
+        console.error(
+          `Failed to commit: ${commitResult.stderr.trim() || commitResult.stdout.trim()}`
+        );
+        return 1;
+      }
     }
-    await git(['tag', 'v0.1.0'], sourceDir);
 
-    // 11. gh repo create.
+    const tagResult = await git(['tag', tag], sourceDir);
+    if (tagResult.code !== 0) {
+      const head = (await git(['rev-parse', 'HEAD'], sourceDir)).stdout.trim();
+      const existing = await resolveTagCommit(sourceDir, tag);
+      if (existing !== head) {
+        // The tag would resolve to an older manifest, so installers asking for
+        // v0.1.0 would get the wrong release.
+        console.error(
+          `The tag ${tag} already exists at ${existing ?? 'an unreadable commit'}, not at the commit this run made (${head}).`
+        );
+        console.error(
+          `Move it with \`git tag -f ${tag}\` once you are sure it is safe, then retry.`
+        );
+        return 1;
+      }
+    }
+
+    // Step 10. gh repo create, under the remote name chosen above.
     const visibilityFlag = visibility === 'public' ? '--public' : '--private';
     const ghResult = await gh(
-      ['repo', 'create', name, visibilityFlag, '--source', sourceDir, '--push'],
+      ['repo', 'create', name, visibilityFlag, '--source', sourceDir, '--remote', remote, '--push'],
       sourceDir
     );
     if (ghResult.code !== 0) {
@@ -170,12 +217,13 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       return 1;
     }
 
-    // 12. Report the result.
+    // Step 11. Report the result.
     const result = {
       name,
       version: manifest.version,
       description,
       visibility,
+      remote,
       skills: selectedSkills.map((skill) => skill.name),
       manifestHash,
       gitignore: gitignoreStatus,
@@ -188,6 +236,9 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
     }
 
     console.log(`\nCollection "${name}" published (v0.1.0).`);
+    if (remote !== 'origin') {
+      console.log(`  published to the "${remote}" remote, because "origin" was already taken.`);
+    }
     console.log(`  manifestHash: ${manifestHash}`);
     console.log(`  .gitignore: ${gitignoreStatus}`);
     if (excluded.length > 0) {

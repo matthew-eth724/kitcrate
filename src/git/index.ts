@@ -75,6 +75,23 @@ export async function cloneRepo(url: string, dir: string, ref?: string): Promise
   }
 }
 
+/** Names of the configured remotes. Empty when there is no repository or no remote. */
+export async function listRemotes(cwd: string): Promise<string[]> {
+  const result = await git(['remote'], cwd);
+  if (result.code !== 0) return [];
+  return result.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/** The commit a tag points at, or null when the tag does not exist. */
+export async function resolveTagCommit(cwd: string, tag: string): Promise<string | null> {
+  const result = await git(['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`], cwd);
+  const commit = result.stdout.trim();
+  return result.code === 0 && commit ? commit : null;
+}
+
 /** True when the directory is inside a git repository. */
 export async function isGitRepo(cwd: string): Promise<boolean> {
   const result = await git(['rev-parse', '--git-dir'], cwd);
