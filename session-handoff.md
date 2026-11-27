@@ -8,6 +8,9 @@
 
 ## Completed This Session
 
+- [x] Every command answers `--help` and `-h` with its own usage, handled in one place in `src/cli.ts` so no command can treat the flag as an argument
+- [x] Recorded feat-018: `kitcrate validate` warns on a collection whose skill source is `.`, which is what `kitcrate create` writes
+
 - [x] Fixed the release-tag guard, which stopped a publish when the collection content changed between runs
 - [x] feat-017 Publish under a free remote name: `src/core/remote.ts` holds the policy, `listRemotes` and `resolveTagCommit` sit in `src/git/index.ts`, and `create.ts` passes `--remote` to `gh`
 - [x] The commit is skipped when the index already matches HEAD, so a failed publish can be retried
@@ -37,7 +40,8 @@
 |---|---|---|---|
 | Type check | `pnpm typecheck` | pass | strict, no `any`, both configs |
 | Lint | `pnpm lint` | pass | prettier clean |
-| Tests | `pnpm test` | pass | 88/88 across 9 files |
+| Tests | `pnpm test` | pass | 113/113 across 10 files |
+| Help | `kitcrate <command> --help` and `-h` for all seven commands | pass | each prints its own usage and exits 0, and the command itself does not run |
 | Build | `pnpm build` | pass | |
 | Project scope | pty harness in `/tmp/pty_drive.py` | pass | prompt rendered both options; Enter put the skill in `<project>/.agents/skills`, the home directory untouched |
 | Global scope | pty harness | pass | Down then Enter put the skill in `$HOME/.agents/skills`, the project directory untouched |
@@ -91,6 +95,8 @@
 4. Run `./init.sh` before editing.
 
 ## Recommended Next Step
+
+- feat-018: `kitcrate validate` on a collection kitcrate created warns "Could not resolve source '.'". The resolver does not accept a bare `.` as a local path the way the `skills` package does, and a skill source has to resolve relative to the collection.json's own directory rather than the working directory. The warning does not fail the check, but it is noise on every collection kitcrate creates.
 
 - `update` still has no integration coverage, at either scope. `test/add.test.ts` drives `add`, `install`, and `remove` against a local git repository with a sandboxed `HOME`; `update` is the obvious next gap.
 - Consider the "copy skills into the repo" mode for `create`, which AGENTS.md lists in the publish flow but is not built.

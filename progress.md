@@ -166,3 +166,12 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
     kitcrate recognises its own collection commits by their subject, so the tag is kitcrate's to
     move. A tag kitcrate did not make is left alone, and the publish stops with a message that
     says so.
+
+- Help handling: every command answers `--help` and `-h` with its own usage. The check lives in
+  one place in `src/cli.ts`, so no command can treat the flag as an argument to act on. Each
+  command module exports its usage text. `kitcrate validate --help` no longer looks for a file
+  named `--help`, and `kitcrate create --help` no longer tries to clone a repo named `--help`.
+- feat-018 (not started): `kitcrate validate` warns on a collection whose skill source is `.`,
+  which is what `kitcrate create` writes. The resolver does not accept a bare `.` as a local
+  path the way the `skills` package does, and a skill source has to resolve relative to the
+  collection.json's own directory rather than the working directory.
