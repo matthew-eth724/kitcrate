@@ -1,4 +1,4 @@
-import { mkdtemp, rm, readFile } from 'fs/promises';
+import { mkdtemp, rm, readFile, stat } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { parseCollectionManifest, type CollectionManifest } from './manifest.js';
@@ -42,6 +42,14 @@ function parseSource(source: string): { url: string; ref?: string } {
     return { url, ref };
   }
 
+  // A `file://` URL names a git repository. The `skills` package clones those
+  // rather than reading them in place, so kitcrate clones them too: resolving
+  // the working tree while installing the clone would compare two different
+  // trees.
+  if (trimmed.startsWith('file://')) {
+    return { url: trimmed };
+  }
+
   // Local path
   if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) {
     return { url: trimmed };
@@ -66,16 +74,27 @@ function parseSource(source: string): { url: string; ref?: string } {
   );
 }
 
+/** True when a source URL is fetched by cloning rather than read in place. */
+function isRemoteUrl(url: string): boolean {
+  return (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('git://') ||
+    url.startsWith('file://')
+  );
+}
+
 /** Resolve a collection source: fetch collection.json, pin the commit, compute the manifest hash. */
 export async function resolveCollection(source: string): Promise<ResolvedManifest> {
   const { url, ref } = parseSource(source);
 
-  // Local path: read collection.json directly, no git commit available.
-  if (!url.startsWith('http') && !url.startsWith('git')) {
-    const manifestJson = await readFile(url, 'utf8');
+  // Local path: read collection.json directly, no clone needed.
+  if (!isRemoteUrl(url)) {
+    const dir = (await stat(url)).isDirectory() ? url : join(url, '..');
+    const manifestJson = await readFile(join(dir, 'collection.json'), 'utf8');
     const manifest = parseCollectionManifest(JSON.parse(manifestJson));
     const manifestHash = computeManifestHash(manifestJson);
-    return { manifest, commit: '', manifestHash, source, url };
+    return { manifest, commit: await localCommit(dir), manifestHash, source, url };
   }
 
   const tempDir = await mkdtemp(join(tmpdir(), 'kitcrate-resolve-'));
@@ -102,4 +121,14 @@ export async function resolveCollection(source: string): Promise<ResolvedManifes
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * The commit a local source sits at, so the lockfile pins something real and
+ * `update` can diff against it. Empty when the directory is not a git
+ * repository; a local source lives in a directory, not the manifest alone.
+ */
+async function localCommit(dir: string): Promise<string> {
+  const result = await git(['rev-parse', 'HEAD'], dir);
+  return result.code === 0 ? result.stdout.trim() : '';
 }
