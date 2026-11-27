@@ -14,6 +14,11 @@ export interface PublishTarget {
   readonly scope: PublishScope;
   /** Where the candidate came from. */
   readonly origin: 'lockfile' | 'global-skills';
+  /**
+   * The ref the collection is installed at, when the lockfile records one. A
+   * collection found through the global skills has none.
+   */
+  readonly ref?: string;
 }
 
 /**
@@ -39,6 +44,7 @@ export async function collectPublishTargets(cwd: string): Promise<PublishTarget[
     source: entry.source,
     scope: entry.scope,
     origin: 'lockfile',
+    ...(entry.ref !== '' && { ref: entry.ref }),
   }));
 
   const installed = await listInstalledSkills({ cwd, scope: 'global' });

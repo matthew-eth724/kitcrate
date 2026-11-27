@@ -6,6 +6,7 @@ import { removeCommand, REMOVE_USAGE } from './commands/remove.js';
 import { listCommand, LIST_USAGE } from './commands/list.js';
 import { validateCommand, VALIDATE_USAGE } from './commands/validate.js';
 import { createCommand, CREATE_USAGE } from './commands/create.js';
+import { publishCommand, PUBLISH_USAGE } from './commands/publish.js';
 import type { CommandOptions } from './core/options.js';
 
 type CommandHandler = (argv: string[], opts: CommandOptions) => Promise<number>;
@@ -52,6 +53,12 @@ const COMMANDS: Record<string, Command> = {
     description:
       'Publish flow: scan, validate, write collection.json, git init, tag, gh repo create',
     usage: CREATE_USAGE,
+  },
+  publish: {
+    handler: publishCommand,
+    description:
+      'Publish a change to a collection that already exists: add skills, bump, tag, push',
+    usage: PUBLISH_USAGE,
   },
 };
 

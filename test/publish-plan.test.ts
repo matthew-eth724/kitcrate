@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import {
   buildPublishedManifest,
   bumpPatchVersion,
   chooseMemberParent,
+  copySkillFolder,
   diffSkillFolders,
   findMemberFolders,
   isCopyableFile,
@@ -125,14 +126,17 @@ describe('publish helpers', () => {
       );
     });
 
-    it('leaves out a member installed from another repository', async () => {
+    it('finds a member from another repository too, so its difference can be reported', async () => {
       await writeSkill(join(root, 'skills', 'burp-notes'), 'burp-notes');
       const members: CollectionMember[] = [
         { skill: 'burp-notes', source: 'acme/shared-skills' },
+        // A member whose folder the repository does not hold at all.
         { skill: 'gone', source: '.' },
       ];
 
-      expect(await findMemberFolders(root, members)).toEqual(new Map());
+      expect(await findMemberFolders(root, members)).toEqual(
+        new Map([['burp-notes', 'skills/burp-notes']])
+      );
     });
 
     it('takes a folder the caller already knows over searching for it', async () => {
@@ -243,6 +247,68 @@ describe('publish helpers', () => {
 
     it('bumps the version even when nothing is added', () => {
       expect(buildPublishedManifest(manifest, []).version).toBe('0.1.1');
+    });
+  });
+
+  describe('copySkillFolder', () => {
+    it('copies the whole folder, references and assets included', async () => {
+      await writeSkill(join(root, 'local', 'alpha'), 'alpha', {
+        'references/api.md': '# api\n',
+        'assets/table.csv': 'a,b\n',
+      });
+
+      const copied = await copySkillFolder(
+        join(root, 'local', 'alpha'),
+        join(root, 'repo', 'skills', 'alpha')
+      );
+
+      expect(copied.map((file) => file.path).sort()).toEqual([
+        'SKILL.md',
+        'assets/table.csv',
+        'references/api.md',
+      ]);
+      expect(
+        await readFile(join(root, 'repo', 'skills', 'alpha', 'references', 'api.md'), 'utf8')
+      ).toBe('# api\n');
+    });
+
+    it('replaces the repository folder, dropping a file the local copy no longer has', async () => {
+      await writeSkill(join(root, 'local', 'alpha'), 'alpha');
+      await writeSkill(join(root, 'repo', 'alpha'), 'alpha', { 'references/old.md': 'gone\n' });
+
+      await copySkillFolder(join(root, 'local', 'alpha'), join(root, 'repo', 'alpha'));
+
+      await expect(
+        readFile(join(root, 'repo', 'alpha', 'references', 'old.md'), 'utf8')
+      ).rejects.toThrow(/ENOENT/);
+    });
+
+    it('leaves credential files behind and keeps the env template', async () => {
+      await writeSkill(join(root, 'local', 'alpha'), 'alpha', {
+        '.env': 'TOKEN=secret\n',
+        '.env.example': 'TOKEN=\n',
+        '.netrc': 'machine github.com\n',
+      });
+
+      const copied = await copySkillFolder(
+        join(root, 'local', 'alpha'),
+        join(root, 'repo', 'alpha')
+      );
+
+      expect(copied.map((file) => file.path).sort()).toEqual(['.env.example', 'SKILL.md']);
+    });
+
+    it('copies nothing from a nested .git', async () => {
+      await writeSkill(join(root, 'local', 'alpha'), 'alpha');
+      await mkdir(join(root, 'local', 'alpha', '.git'), { recursive: true });
+      await writeFile(join(root, 'local', 'alpha', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+
+      const copied = await copySkillFolder(
+        join(root, 'local', 'alpha'),
+        join(root, 'repo', 'alpha')
+      );
+
+      expect(copied.map((file) => file.path)).toEqual(['SKILL.md']);
     });
   });
 

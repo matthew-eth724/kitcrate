@@ -70,12 +70,14 @@ describe('collectPublishTargets', () => {
         source: 'github:acme/web-security',
         scope: 'project',
         origin: 'lockfile',
+        ref: 'v0.1.0',
       },
       {
         name: 'shared',
         source: 'github:acme/shared-skills',
         scope: 'global',
         origin: 'lockfile',
+        ref: 'v0.1.0',
       },
     ]);
   });
@@ -123,6 +125,7 @@ describe('collectPublishTargets', () => {
         source: 'github:acme/web-security',
         scope: 'global',
         origin: 'lockfile',
+        ref: 'v0.1.0',
       },
     ]);
   });

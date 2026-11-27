@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, stat } from 'fs/promises';
 import { dirname, join, relative, sep } from 'path';
 import { parseCollectionManifest, type CollectionManifest } from './manifest.js';
 import { isCredentialFileName } from './secrets.js';
@@ -97,9 +97,12 @@ async function sameContents(a: string, b: string): Promise<boolean> {
  *
  * A member is found by its `SKILL.md` frontmatter rather than its folder name:
  * a skill may live in a folder with a different name, and the manifest names
- * the skill, not its path. Only a member the collection carries itself
- * (`source: "."`) is searched for, because another repository's member has no
- * folder here to find.
+ * the skill, not its path.
+ *
+ * Every member is looked for, including one installed from another repository.
+ * The collection is not where consumers fetch such a member, but its folder
+ * here can still be compared with the local copy so a difference is reported
+ * rather than silently ignored.
  */
 export async function findMemberFolders(
   repoRoot: string,
@@ -109,7 +112,6 @@ export async function findMemberFolders(
   // A caller that already knows a member's folder saves the search for it.
   const wanted = new Set<string>();
   for (const member of members) {
-    if (!isOwnMember(member)) continue;
     if (member.repoPath === undefined) wanted.add(member.skill);
     else found.set(member.skill, member.repoPath);
   }
@@ -262,4 +264,36 @@ export function buildPublishedManifest(
 export function isCopyableFile(relativePath: string): boolean {
   const name = relativePath.split('/').pop() ?? relativePath;
   return !isCredentialFileName(name);
+}
+
+/** A file that was copied from a skill's local folder into the collection. */
+export interface CopiedFile {
+  /** Path relative to the skill folder, `/`-separated. */
+  readonly path: string;
+}
+
+/**
+ * Replace a repository skill folder with the local copy of it.
+ *
+ * The folder is replaced, not merged, so a file the local copy dropped is gone
+ * from the collection too: a publish says the repository holds what the local
+ * skill holds. A `.git` directory never travels, and neither does a credential
+ * file, which stays on this machine.
+ *
+ * Returns the files copied, relative to the skill folder, so the caller can
+ * stage exactly what changed.
+ */
+export async function copySkillFolder(localDir: string, repoDir: string): Promise<CopiedFile[]> {
+  const local = await listFolderFiles(localDir);
+  await rm(repoDir, { recursive: true, force: true });
+
+  const copied: CopiedFile[] = [];
+  for (const [path, source] of [...local].sort(([a], [b]) => a.localeCompare(b))) {
+    if (!isCopyableFile(path)) continue;
+    const target = join(repoDir, ...path.split('/'));
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(source, target);
+    copied.push({ path });
+  }
+  return copied;
 }
