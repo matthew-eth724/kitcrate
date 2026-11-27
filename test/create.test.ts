@@ -325,4 +325,45 @@ describe('createCommand', () => {
     const tracked = await git(['ls-files', '-z'], root);
     expect(tracked.stdout).not.toContain('README.md');
   });
+
+  it('moves a release tag left by an earlier create run to the commit this run made', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await git(['init'], root);
+    await git(['add', '--', '.agents'], root);
+    await git(['commit', '-m', 'chore: initial collection alpha v0.1.0'], root);
+    await git(['tag', 'v0.1.0'], root);
+    const tagged = (await git(['rev-parse', 'HEAD'], root)).stdout.trim();
+
+    // The collection changes, so this run makes a new commit.
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill, revised');
+    await writeSkill(join(root, '.agents', 'skills', 'beta'), 'beta', 'The beta skill');
+
+    const { code } = await runCreate(root);
+
+    expect(code).toBe(0);
+    const head = (await git(['rev-parse', 'HEAD'], root)).stdout.trim();
+    expect(head).not.toBe(tagged);
+    // The release tag now marks the collection that was published.
+    const release = (await git(['rev-list', '-n', '1', 'v0.1.0'], root)).stdout.trim();
+    expect(release).toBe(head);
+  });
+
+  it('refuses to move a release tag kitcrate did not make', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await git(['init'], root);
+    await git(['add', '--', '.agents'], root);
+    await git(['commit', '-m', 'a commit of the author own'], root);
+    await git(['tag', 'v0.1.0'], root);
+    const tagged = (await git(['rev-parse', 'HEAD'], root)).stdout.trim();
+
+    const { code } = await runCreate(root);
+
+    expect(code).toBe(1);
+    // The author's own tag is left exactly where it was.
+    const release = (await git(['rev-list', '-n', '1', 'v0.1.0'], root)).stdout.trim();
+    expect(release).toBe(tagged);
+    // And nothing was published.
+    const remotes = await git(['remote'], root);
+    expect(remotes.stdout.trim()).toBe('');
+  });
 });

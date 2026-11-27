@@ -194,14 +194,29 @@ export async function createCommand(argv: string[], options: CommandOptions): Pr
       const existing = await resolveTagCommit(sourceDir, tag);
       if (existing !== head) {
         // The tag would resolve to an older manifest, so installers asking for
-        // v0.1.0 would get the wrong release.
-        console.error(
-          `The tag ${tag} already exists at ${existing ?? 'an unreadable commit'}, not at the commit this run made (${head}).`
-        );
-        console.error(
-          `Move it with \`git tag -f ${tag}\` once you are sure it is safe, then retry.`
-        );
-        return 1;
+        // v0.1.0 would get the wrong release. An earlier run of `kitcrate
+        // create` can leave the tag behind on an older commit of this
+        // collection, and that tag is kitcrate's own, so it moves.
+        if (existing && (await isKitcrateCollectionCommit(sourceDir, existing))) {
+          const moved = await git(['tag', '-f', tag, head], sourceDir);
+          if (moved.code !== 0) {
+            const detail = moved.stderr.trim() || moved.stdout.trim();
+            console.error(`Failed to move the tag ${tag}: ${detail}`);
+            return 1;
+          }
+          say(
+            json,
+            `Moved the ${tag} tag to this commit; an earlier kitcrate create run left it on an older one.`
+          );
+        } else {
+          console.error(
+            `The tag ${tag} already exists at ${existing ?? 'an unreadable commit'}, not at the commit this run made (${head}).`
+          );
+          console.error(
+            `kitcrate did not make that tag, so it will not move it. Move it with \`git tag -f ${tag}\` once you are sure it is safe, then retry.`
+          );
+          return 1;
+        }
       }
     }
 
@@ -291,6 +306,19 @@ function isInteractive(): boolean {
 /** Whether a discovered skill sits at the root of the scanned directory. */
 function isRootPath(path: string): boolean {
   return path === '' || path === '.' || path === './';
+}
+
+/**
+ * The subject kitcrate writes on a collection's first commit. It marks the
+ * commits kitcrate made, so a release tag left on one of them is kitcrate's
+ * own to move rather than something the author put there.
+ */
+const COLLECTION_COMMIT_SUBJECT = 'chore: initial collection ';
+
+/** True when a commit is one of kitcrate's own collection commits. */
+async function isKitcrateCollectionCommit(cwd: string, commit: string): Promise<boolean> {
+  const subject = (await git(['log', '-1', '--format=%s', commit], cwd)).stdout.trim();
+  return subject.startsWith(COLLECTION_COMMIT_SUBJECT);
 }
 
 /**
