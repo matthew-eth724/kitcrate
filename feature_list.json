@@ -161,6 +161,16 @@
       ],
       "status": "done",
       "evidence": "src/core/scope.ts (InstallScope, DEFAULT_SCOPE, scopeDirectory); CollectionLockEntrySchema.scope defaults to 'project' so pre-change lockfiles still load; add prompts with clack select on a TTY, takes global from --global, and defaults to project under --yes/--json/non-TTY; install/update/remove pass entry.scope to the skills API; removeCollectionSkills takes a scope. Verified in a pty: the prompt renders both options and a cancelled prompt prints 'Cancelled.' with exit 130; a real global add put the skill in $HOME/.agents/skills and a project add in <project>/.agents/skills. test/add.test.ts covers both scopes plus remove and install round trips; test/lockfile.test.ts covers the backwards-compatible default and a global round trip. Preexisting detection is filtered to the chosen scope, so adding globally after the same collection was added to the project installs it in both places instead of skipping every member as preexisting; test/add.test.ts proves it, and removing the filter makes only that test fail."
+    },
+    {
+      "id": "feat-017",
+      "name": "Publish into a repository that already has remotes",
+      "description": "kitcrate create chooses a free remote name instead of letting gh default to origin, and a failed publish can be retried",
+      "dependencies": [
+        "feat-009"
+      ],
+      "status": "done",
+      "evidence": "src/core/remote.ts holds the policy as a pure function (origin when free, github when origin is taken, a refusal naming both when neither is free); src/git/index.ts gained listRemotes and resolveTagCommit; create.ts passes --remote to gh, skips the commit when the index already matches HEAD, tolerates a v0.1.0 tag that points at HEAD, and checks git init. The reported failure was reproduced first with a faithful gh stub: 'Failed to create GitHub repo: X Unable to add remote \"origin\"'. The fix was verified on the real CLI: a repository with an existing origin published to github with origin left on its original URL, a failed publish retried successfully, both remote names taken refused the publish before any commit, and a v0.1.0 tag on an unrelated commit refused it before a remote was added. test/create.test.ts covers the publish and the retry, including the retry when the repository holds untracked files, which is the case where git uses a different wording for an empty commit."
     }
   ]
 }

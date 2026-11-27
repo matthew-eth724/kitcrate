@@ -114,8 +114,22 @@ kitcrate only removes skills it installed itself.
 7. `git init`, then stage only `collection.json`, `.gitignore`, and the selected skill folders. Never `git add .`.
 8. Publish gate: unstage credential files (`.env`, `.env.*`, `.netrc`, `.npmrc`, …) so they stay on disk but are never pushed; scan the contents of every tracked file; warn when the repository's existing history already contains a credential file; refuse when the repository already has staged changes, because the commit takes the whole index.
 9. Commit, tag `v0.1.0`.
-10. `gh repo create <name> --<visibility> --source . --push`.
+10. `gh repo create <name> --<visibility> --source . --push --remote <name>`.
 11. Print the install command: `kitcrate add github:<user>/<name>`.
+
+### Publishing into a repository that already has remotes
+
+`gh repo create` defaults the new repository's remote name to `origin` and refuses when that name is taken. kitcrate chooses a free name itself, in `src/core/remote.ts`: `origin` when it is free, otherwise `github`. The author's own remotes are never renamed or removed. When neither name is free, the publish stops before the commit, with a message saying which names are taken.
+
+The remote name is reported in the JSON output and, when it is not `origin`, in the human output too, so the author knows the new repository is not on `origin`.
+
+### Retrying a publish
+
+`kitcrate create` converges on the published state whether or not a previous run got that far.
+
+- The commit is skipped when the index already matches `HEAD`, which is the case after a failed publish left the collection committed. kitcrate compares the index against `HEAD` rather than reading git's refusal, because that message is translated and comes in more than one wording.
+- A `v0.1.0` tag that already exists is tolerated when it points at `HEAD`. When it points somewhere else, the publish stops: the tag would resolve to an older manifest, so `kitcrate add <source>@v0.1.0` would install the wrong release.
+- `git init` is checked rather than assumed, so a repository that could not be initialized stops the run instead of carrying on against whatever state is there.
 
 ### Collection name convention
 
@@ -152,6 +166,7 @@ src/
     name.ts       # collection name normalization
     scope.ts      # install scope (project | global) and its directory
     secrets.ts    # pre-publish scanner
+    remote.ts     # which remote name the new repository is published under
   skills/         # the only module that imports from `skills`
   git/            # thin wrappers around git and gh
 test/

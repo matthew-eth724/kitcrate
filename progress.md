@@ -137,3 +137,28 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
   (shared `CommandOptions`).
 - Verified end-to-end with a mocked `gh`: `.env` excluded from the commit but kept on disk,
   `.env.example` published, secret inside a skill file blocked, credential-bearing history blocked.
+
+- feat-017 Publish into a repository that already has remotes, and make the publish retryable:
+  - Root cause: `gh repo create --source <dir> --push` defaults the new repository's remote
+    name to `origin` and refuses when that name is taken. kitcrate never looked at the
+    repository's remotes, so it handed `gh` a name that could not be added. The `gh` binary
+    holds the literal `Unable to add remote %q`, while a missing repository and a taken name
+    have different messages, which ruled those out.
+  - `src/core/remote.ts` holds the policy as a pure function: `origin` when free, `github`
+    when `origin` is taken, and a refusal naming both when neither is free. The refusal
+    happens before the commit, so nothing is left behind. The author's remotes are never
+    renamed or removed.
+  - The remote name goes to `gh` as `--remote <name>` and into the JSON output. The human
+    output says so when the name is not `origin`.
+  - A failed publish left a commit behind, so the retry died on `git commit` with an empty
+    tree. Git prints "nothing to commit" on stdout, which is why the message read
+    `Failed to commit: ` with nothing after it. The commit is now skipped when the index
+    already matches HEAD. That comparison replaced a check on git's wording, which is
+    translated and differs when the repository holds untracked files.
+  - The `git tag v0.1.0` result was discarded, so an existing tag silently pointed at the
+    previous run's commit and `kitcrate add <source>@v0.1.0` would have installed the old
+    manifest. It is now tolerated only when it points at HEAD, and otherwise stops the
+    publish with a message naming both commits.
+  - `git init` is checked instead of assumed.
+  - The step comments in create.ts now follow AGENTS.md's 11-step flow instead of skipping
+    numbers.
