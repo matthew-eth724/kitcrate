@@ -2,70 +2,62 @@
 
 ## Current Objective
 
-- Goal: `kitcrate create` author experience — collection name normalization and an interactive skill picker
-- Current status: Both implemented and verified. All 13 features complete.
-- Branch / commit: main (`fd1a9d7` was the bootstrap base; the create-UX work is uncommitted in the working tree)
+- Goal: `kitcrate add` asks whether to install a collection into the project or the user's home, and every later command follows that choice
+- Current status: Implemented and verified. All 16 features complete.
+- Branch / commit: main (`4873b67` was the base; the install-scope work is uncommitted in the working tree)
 
 ## Completed This Session
 
 - [x] Loaded the `poteto-mode` skill and its Feature playbook; wrote the throughput checkpoint in `todo.md`
-- [x] Spawned an independent `how` explainer over the create subsystem to check the layering decisions
+- [x] Confirmed upstream `skills` already implements both scopes: `scope: 'global'` installs to `$HOME/.agents/skills`, `scope: 'project'` to `<cwd>/.agents/skills`. Verified by running a real global install against a sandboxed `HOME`.
 - [x] Delegated the implementation to a subagent with worktree isolation (feature model: sonnet)
-- [x] Recovered the delegate's work: its worktree lost its `.git` link before committing, so the files were copied back into the main checkout and reviewed there
-- [x] feat-011 Collection name normalization: `src/core/name.ts`, `normalizeCollectionName` returning a discriminated union
-- [x] feat-012 Interactive skill picker: `@clack/prompts` multiselect, space toggles, Enter finalizes, cancellation exits 130
-- [x] feat-013 skills CLI discovery reuse: `discoverSkillsInDirectory` built on `resolveSource`; the hand-rolled scan and frontmatter parser are gone
-- [x] Fixed the adapter's `isSkillsDiagnostic` guard, which was always false because upstream `isDiagnostic(error)` needs explicit codes
-- [x] Fixed the default collection name: `sourceDir.split(sep)` turned `.` into the literal name `"."`
-- [x] Added a `gh()` wrapper in `src/git/index.ts` and removed the last `any` from the codebase
-- [x] Added `--allow-secrets` to the CLI usage text, which was missing
-- [x] Made `create --json` emit machine-readable output, as AGENTS.md requires for every command
-- [x] Added a dirty-index guard: the commit takes the whole index, so pre-staged files would have been published
-- [x] Warned when a selected skill lives at the source root, because the whole directory is then published
-- [x] feat-014 Picker presentation: names only in the list, an empty box that becomes a green tick when ticked
-- [x] feat-015 Secrets never block a publish: findings are reported and the publish goes ahead
+- [x] Recovered the delegate's work: it did not commit, so the files were copied back into the main checkout and reviewed there
+- [x] feat-016 Install scope: `src/core/scope.ts` owns the `InstallScope` type, the `project` default, and the scope directory
+- [x] `CollectionLockEntrySchema.scope` defaults to `project`, so a lockfile written before this change still loads. An older kitcrate reading a newer lockfile drops the unknown key.
+- [x] `add` prompts with clack's `select` on a real TTY, takes `global` from `--global`, and takes `project` under `--yes`, `--json`, or no TTY
+- [x] `install`, `update`, and `remove` pass `entry.scope` to the `skills` API; `removeCollectionSkills` takes a scope
+- [x] `list` reports each collection's scope, as a line and in `--json`
+- [x] Fixed the preexisting check: it counted skills from both scopes, so a global add after a project add marked every member preexisting and installed nothing while reporting success
+- [x] Fixed `install.ts` for the same reason: a global collection looked already restored when the skill sat in the project scope
+- [x] Fixed three local-source bugs in `src/core/resolve.ts` found while testing: a directory source threw EISDIR, `file://` URLs became a GitHub shorthand URL, and a local path pinned an empty commit the schema rejected
+- [x] Fixed the installed-skill counts in `add` and `install`, which counted one entry per agent and so read "Installed 77 skill(s)" for a single skill
 - [x] Updated AGENTS.md, feature_list.json, progress.md, and this handoff
 
 ## Verification Evidence
 
 | Check | Command | Result | Notes |
 |---|---|---|---|
-| Type check | `pnpm typecheck` | pass | strict, no `any` |
+| Type check | `pnpm typecheck` | pass | strict, no `any`, both configs |
 | Lint | `pnpm lint` | pass | prettier clean |
-| Tests | `pnpm test` | pass | 67/67 across 7 files |
+| Tests | `pnpm test` | pass | 80/80 across 8 files |
 | Build | `pnpm build` | pass | |
-| Harness | `validate-harness.mjs` | 100/100 | run after the doc updates |
-| Interactive picker | pty harness in `/tmp/pty_drive.py` | pass | typed `My Web Security` -> `my-web-security`; space toggled `beta` off; the commit held only `alpha` and `gamma` |
-| Convention error | pty harness | pass | `my_collection` blocked inline with `Unsupported: "_"`; nothing published |
-| Dirty index | `create --yes` over a repo with a staged file | pass | exit 1, nothing committed, the author's index left intact |
-| Checkbox rendering | pty harness, raw bytes | pass | unticked `ESC[2m` empty box, ticked `ESC[32m` green tick; list scrolls in a 12-row terminal |
-| Secrets never block | `create --yes` over a skill holding an AWS key and a GitHub token | pass | exit 0, both findings reported, the file committed; `.env` still excluded from the commit |
+| Project scope | pty harness in `/tmp/pty_drive.py` | pass | prompt rendered both options; Enter put the skill in `<project>/.agents/skills`, the home directory untouched |
+| Global scope | pty harness | pass | Down then Enter put the skill in `$HOME/.agents/skills`, the project directory untouched |
+| Scope recorded | lockfile after a global add | pass | `scope: "global"`, and `list` shows it |
+| Remove follows the scope | `kitcrate remove --yes` on a global collection | pass | removed from the home, the project left alone |
+| Install follows the scope | skill deleted by hand, then `kitcrate install --yes` | pass | restored into the home, the project left alone |
+| Counts | `add` output | pass | "Installed 1 skill(s)", not one per agent |
 
 ## Files Changed
 
-- `src/core/name.ts` (new)
-- `src/commands/create.ts`
+- `src/core/scope.ts` (new)
+- `src/core/lockfile.ts`, `src/core/options.ts`, `src/core/resolve.ts`
+- `src/commands/{add,install,update,remove,list}.ts`
 - `src/skills/index.ts`
-- `src/git/index.ts`
 - `src/cli.ts`
-- `src/commands/pick-skills.ts` (new)
-- `tsconfig.test.json` (new, typechecks the test files)
-- `test/name.test.ts` (new)
-- `test/create.test.ts`
-- `package.json`, `pnpm-lock.yaml`
+- `test/add.test.ts` (new)
+- `test/lockfile.test.ts`, `test/create.test.ts`
 - `AGENTS.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
 
 ## Decisions Made
 
-- The normalizer is pure and lives in `core/`, so it is testable without a TTY. It returns a discriminated union rather than throwing.
-- Normalization applies only at the author prompt. The `collection.json` schema still rejects invalid names, because the format is a published contract.
-- Unsupported characters are refused rather than guessed at, per the request.
-- Skill discovery is delegated to the `skills` CLI. kitcrate's own scan and frontmatter parser were deleted, as AGENTS.md requires.
-- All prompts moved to `@clack/prompts`. `readline` and clack's multiselect fight over stdin raw mode.
-- A skill at the source root is the whole directory, matching how upstream `skills` copies a skill folder. kitcrate warns instead of silently publishing extra files.
-- Pre-staged content makes `create` refuse rather than publish. Refusing is the safer default and matches the command's existing fail-loudly posture.
-- clack hardcodes its checkbox symbols, so the picker draws itself on top of `@clack/core`'s `MultiSelectPrompt`. Only the rendering is custom; the keyboard handling is still clack's.
-- Secret findings never stop a publish. Credential files are still excluded from the commit, which is prevention rather than blocking, and a credential file already in git history now warns instead of blocking. `--allow-secrets` survives as an accepted no-op.
+- The scope is a per-collection field, not a per-lockfile one. `kitcrate-lock.json` stays in the project; a global collection is still recorded in the project that asked for it.
+- The prompt is skipped under `--yes`, `--json`, and any non-TTY run, where the scope is `project`. That keeps existing scripts working and matches what `add` did before.
+- `--global` lives on the shared `CommandOptions`; only `add` reads it, because the other commands have no scope to choose.
+- A skill counts as already present only at the scope the command operates on. The same skill can sit in both scopes at once.
+- `file://` is a **git** source, matching upstream: the `skills` package clones those URLs. kitcrate clones them too, because resolving the working tree while installing the clone would compare two different trees.
+- The lockfile's `commit` may now be empty, because a local directory that is not a git repository has no commit to pin. `manifestHash` remains the integrity check.
+- The scope directory in `src/core/scope.ts` is display-only. The install always goes through the `skills` API, so if upstream moves the path only the hint goes stale.
 
 ## Blockers / Risks
 
@@ -80,5 +72,5 @@
 
 ## Recommended Next Step
 
-- Add integration tests with local bare git repos as fake remotes for the consumer commands (`add`, `install`, `update`, `remove`). The `create` command now has integration coverage; the consumer side does not.
+- `update` still has no integration coverage, at either scope. `test/add.test.ts` drives `add`, `install`, and `remove` against a local git repository with a sandboxed `HOME`; `update` is the obvious next gap.
 - Consider the "copy skills into the repo" mode for `create`, which AGENTS.md lists in the publish flow but is not built.

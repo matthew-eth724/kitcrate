@@ -75,13 +75,24 @@ Keep the entry shape (`source`, `skill`, optional `ref`) aligned with skills.sh 
 
 | Command | Behavior |
 |---|---|
-| `kitcrate add <source>` | Fetch `collection.json`, install member skills via `skills`, write `kitcrate-lock.json` |
+| `kitcrate add <source>` | Fetch `collection.json`, install member skills via `skills`, write `kitcrate-lock.json`. Asks whether to install into the project or globally |
 | `kitcrate install` | Restore all collections from both lockfiles; verify `manifestHash` |
 | `kitcrate update [name]` | Re-resolve ref, diff manifests, add/remove/bump skills, rewrite lock |
 | `kitcrate remove <name>` | Remove a collection; delete only skills kitcrate installed itself (see ownership rules) |
-| `kitcrate list` | Show installed collections and their skills |
+| `kitcrate list` | Show installed collections, their scope, and their skills |
 | `kitcrate create` | Publish flow (below) |
 | `kitcrate validate [path]` | Check `collection.json` and referenced skills |
+
+### Install scope
+
+`kitcrate add` asks where the collection's skills go. The choice is recorded per collection in `kitcrate-lock.json` and every later command follows it.
+
+- **project**: skills land in `<project>/.agents/skills`. The default, and what `add` did before the scope existed.
+- **global**: skills land in `~/.agents/skills`, shared across every project on the machine.
+- The prompt is skipped under `--yes`, `--json`, and any non-TTY run, where the scope is `project`. `--global` selects the global scope without prompting.
+- The scope is a per-collection field, not a per-lockfile one. `kitcrate-lock.json` stays in the project; a global collection is still recorded in the project that asked for it.
+- A skill counts as already installed only at the **same** scope. The same skill can sit in both scopes at once, so an unscoped check would make a global `add` silently install nothing.
+- `src/core/scope.ts` owns the scope type and the directory shown in the prompt. The install itself always goes through the `skills` API.
 
 ### Ownership rules
 
@@ -139,6 +150,7 @@ src/
     resolve.ts    # fetch collection.json at ref -> commit SHA
     hash.ts       # manifestHash
     name.ts       # collection name normalization
+    scope.ts      # install scope (project | global) and its directory
     secrets.ts    # pre-publish scanner
   skills/         # the only module that imports from `skills`
   git/            # thin wrappers around git and gh
@@ -173,7 +185,7 @@ No hosted registry, search, or accounts. No forking of `skills`. No second skill
 1. Core: manifest schema, lockfile, resolver, `src/skills/` adapter.
 2. Consume: `add`, `install`, `list`, `update`, `remove`.
 3. Author: `validate`, `create`.
-4. Later: static registry index, global scope, collection dependencies, upstream proposal to `skills` for native collection support.
+4. Later: static registry index, collection dependencies, upstream proposal to `skills` for native collection support.
 
 ## Agent startup & done
 

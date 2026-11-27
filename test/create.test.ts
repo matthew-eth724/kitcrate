@@ -118,11 +118,7 @@ describe('createCommand', () => {
       lines.push(args.map(String).join(' '));
     });
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const code = await createCommand([dir], {
-      yes: true,
-      json: true,
-      debug: false,
-    });
+    const code = await createCommand([dir], { yes: true, json: true, debug: false, global: false });
     return { code, stdout: lines.join('\n') };
   }
 
@@ -231,6 +227,7 @@ describe('createCommand', () => {
       yes: true,
       json: true,
       debug: false,
+      global: false,
     });
 
     expect(code).toBe(0);

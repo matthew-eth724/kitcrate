@@ -86,6 +86,45 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
 
 ## Recent Changes
 
+- Install scope: `kitcrate add` now asks where the collection's skills go, and the answer
+  is recorded in `kitcrate-lock.json` as `scope`.
+  - New `src/core/scope.ts` owns the `InstallScope` type, the `project` default, and the one
+    place that knows the scope directory (`<project>/.agents/skills` or `~/.agents/skills`,
+    display only; the install still goes through `skills`).
+  - `CollectionLockEntrySchema.scope` is `z.enum(['project', 'global']).default('project')`,
+    so a lockfile written before this change still loads and means project scope. Old
+    kitcrate reading a new lockfile just strips the key (zod drops unknown keys).
+  - Preexisting detection only counts skills installed at the scope being installed into.
+    `listSkills({ scope: 'all' })` returns both scopes, so without the filter a global add
+    after a project add marked every member preexisting, installed nothing, and reported
+    success while `~/.agents/skills` stayed empty.
+  - `add` takes `--global` with no prompt, prompts with clack's `select` on a real TTY
+    (cancel prints `Cancelled.` and exits 130), and takes `project` silently under
+    `--yes`, `--json`, or no TTY.
+  - `install`, `update`, and `remove` all pass `entry.scope` to the skills API.
+    `removeCollectionSkills` now takes a scope like `installCollectionSkills` does.
+  - The "already installed" check counts a skill only at the scope a command operates on.
+    `install.ts` filters by `entry.scope` before deciding what to restore; without that,
+    a collection locked global looked already restored when the skill sat in the project
+    scope, so `kitcrate install` restored nothing. `update.ts` has no presence check to
+    filter, because it diffs the manifest and removes through the adapter's ownership path.
+  - `list` reports each collection's scope, as a `scope:` line and as `scope` in `--json`.
+  - `--global` lives on the shared `CommandOptions`; only `add` reads it, because the other
+    commands have no scope to choose.
+- Local sources (`src/core/resolve.ts`), three fixes found while testing the scope feature:
+  - A directory source read `collection.json` off the directory and threw EISDIR. It now
+    resolves the directory first.
+  - `file://` URLs fell through to the GitHub shorthand and became
+    `https://github.com/file:///…`. They are now treated as **git** sources, matching
+    upstream: the `skills` package clones a `file://` URL, so kitcrate clones it too.
+    Reading the working tree while installing the clone would compare two different trees.
+    A `file://` URL must therefore name a git repository, exactly as upstream requires.
+  - A local path pinned `commit: ''`, which the lockfile schema then rejected on read even
+    though `add` had just written it. The resolver now pins `git rev-parse HEAD` for a local
+    git repo, and the schema tolerates an empty commit for a directory that is not one.
+  - The installed-skill counts in `add` and `install` counted one entry per agent, so one
+    skill read as "Installed 77 skill(s)". They now count distinct skill names.
+
 - secrets.ts: `.env.example` files are now allowed (skipped during scan); `.env` and `.env.<variant>` (e.g. `.env.production`) remain blocked
 - create.ts: publish flow rewritten to exclude credentials instead of blocking the whole publish.
   Writes a managed `.gitignore` (`.env`, `.env.*`, `!.env.example`), stages only
