@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm, chmod } from 'fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod } from 'fs/promises';
 import { basename, join } from 'path';
 import { tmpdir } from 'os';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
@@ -16,6 +16,31 @@ async function writeSkill(dir: string, name: string, description: string): Promi
     'utf8'
   );
 }
+
+/**
+ * A stand-in for `gh repo create <name> --source <dir> --push [--remote <name>]`.
+ * It fails the way gh does when the requested remote name is already taken,
+ * and records the name it was asked for so the test can read it back.
+ */
+const GH_STUB = `#!/bin/sh
+source_dir=""
+remote="origin"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --source) source_dir="$2"; shift 2 ;;
+    --remote|-r) remote="$2"; shift 2 ;;
+    --push|--public|--private) shift ;;
+    *) shift ;;
+  esac
+done
+printf '%s\\n' "$remote" > "$GH_STUB_LOG"
+if git -C "$source_dir" remote get-url "$remote" >/dev/null 2>&1; then
+  echo "X Unable to add remote \\"$remote\\"" >&2
+  exit 1
+fi
+git -C "$source_dir" remote add "$remote" "https://github.com/fixture/$remote.git" 2>/dev/null
+exit 0
+`;
 
 describe('discoverSkillsInDirectory', () => {
   let root: string;
@@ -80,18 +105,18 @@ describe('createCommand', () => {
     binDir = await mkdtemp(join(tmpdir(), 'kitcrate-bin-'));
 
     // A `gh` stub keeps the test off the network.
-    const ghStub = join(binDir, 'gh');
-    await writeFile(ghStub, '#!/bin/sh\nexit 0\n', 'utf8');
-    await chmod(ghStub, 0o755);
+    await writeGhStub(GH_STUB);
 
     originalPath = process.env['PATH'];
     process.env['PATH'] = `${binDir}:${originalPath ?? ''}`;
+    process.env['GH_STUB_LOG'] = join(root, 'gh.log');
 
     originalEnv = {
       author: process.env['GIT_AUTHOR_NAME'],
       email: process.env['GIT_AUTHOR_EMAIL'],
       committer: process.env['GIT_COMMITTER_NAME'],
       committerEmail: process.env['GIT_COMMITTER_EMAIL'],
+      stubLog: process.env['GH_STUB_LOG'],
     };
     process.env['GIT_AUTHOR_NAME'] = 'kitcrate test';
     process.env['GIT_AUTHOR_EMAIL'] = 'test@kitcrate.local';
@@ -110,6 +135,18 @@ describe('createCommand', () => {
     await rm(root, { recursive: true, force: true });
     await rm(binDir, { recursive: true, force: true });
   });
+
+  /** Replace the `gh` stand-in on PATH. */
+  async function writeGhStub(script: string): Promise<void> {
+    const ghStub = join(binDir, 'gh');
+    await writeFile(ghStub, script, 'utf8');
+    await chmod(ghStub, 0o755);
+  }
+
+  /** The remote name the `gh` stand-in was asked to use. */
+  async function requestedRemote(): Promise<string> {
+    return (await readFile(join(root, 'gh.log'), 'utf8')).trim();
+  }
 
   /** Run create non-interactively and capture what it printed. */
   async function runCreate(dir: string): Promise<{ code: number; stdout: string }> {
@@ -233,5 +270,41 @@ describe('createCommand', () => {
     expect(code).toBe(0);
     expect(errors.join('\n')).toMatch(/Skipped 1 invalid skill/);
     expect(errors.join('\n')).toMatch(/frontmatter/);
+  });
+
+  it('publishes into a repository that already has an origin remote', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await git(['init'], root);
+    await git(['remote', 'add', 'origin', 'https://github.com/fixture/existing.git'], root);
+
+    const { code, stdout } = await runCreate(root);
+
+    expect(code).toBe(0);
+    // gh was asked for a remote name it could actually add.
+    expect(await requestedRemote()).not.toBe('origin');
+    // The author's own remote is left exactly as it was.
+    const remotes = await git(['remote'], root);
+    expect(remotes.stdout.split('\n').filter(Boolean).sort()).toEqual(['github', 'origin']);
+    const originUrl = await git(['remote', 'get-url', 'origin'], root);
+    expect(originUrl.stdout.trim()).toBe('https://github.com/fixture/existing.git');
+    // The machine-readable output says where it was published.
+    expect((JSON.parse(stdout) as { remote: string }).remote).toBe('github');
+  });
+
+  it('publishes on a retry after the first publish failed', async () => {
+    await writeSkill(join(root, '.agents', 'skills', 'alpha'), 'alpha', 'The alpha skill');
+    await writeGhStub('#!/bin/sh\necho "X Could not reach GitHub" >&2\nexit 1\n');
+
+    const first = await runCreate(root);
+    expect(first.code).toBe(1);
+    // The failed run left a commit behind, which the retry has to cope with.
+    const log = await git(['log', '--oneline'], root);
+    expect(log.stdout).toContain('initial collection');
+
+    await writeGhStub(GH_STUB);
+    const second = await runCreate(root);
+
+    expect(second.code).toBe(0);
+    expect(await requestedRemote()).toBe('origin');
   });
 });
