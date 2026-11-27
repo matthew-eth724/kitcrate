@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300" role="img" aria-labelledby="title desc">
   <title id="title">kitcrate</title>
-  <desc id="desc">collections of agent skills</desc>
+  <desc id="desc">collections for agent skills</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0d1117"/>
@@ -35,7 +35,7 @@
   </g>
 
   <text x="196" y="132" font-family="'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace" font-size="76" font-weight="700" fill="#e6edf3" letter-spacing="-2">kitcrate</text>
-  <text x="200" y="178" font-family="'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace" font-size="22" fill="#8b949e" letter-spacing="1">collections of agent skills</text>
+  <text x="200" y="178" font-family="'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace" font-size="22" fill="#8b949e" letter-spacing="1">collections for agent skills</text>
 
   <g font-family="'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace" font-size="16" fill="#58a6ff">
     <text x="200" y="222" text-anchor="start">$</text>
