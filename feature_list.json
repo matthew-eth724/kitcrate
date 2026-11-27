@@ -206,6 +206,19 @@
       ],
       "status": "done",
       "evidence": "pnpm typecheck, pnpm lint, pnpm test (153 passed, 14 files) and pnpm build all pass. src/core/source.ts parses owner/repo, github:owner/repo, https/ssh GitHub URLs, and a trailing @ref, and returns null or the source unchanged for a local path or another host. src/core/members.ts groups a manifest's members by source and ref, mapping '.' to the collection's own source and ref. src/core/install-members.ts is the one installer add, install and update call. src/commands/progress.ts holds the delayed spinner both list and create use. Overflowing the source parser past 80 columns was caught by pnpm lint against the real file. Verified on the built CLI: a project whose collection entry is github:matt711/mywebskills and whose skills-lock.json records aave/skills renders 'Collection: matt711/mywebskills' and 'Source: aave/skills', while --json keeps both raw. create was run for real against this machine and wrote source aave/skills for account-activity, parsed from the recorded clone URL. test/members.test.ts covers same-source collapsing, different repos, '.' and a member's own ref; test/source.test.ts covers every form; test/create.test.ts covers owner/repo and the '.' fallback; test/add.test.ts records the skills install calls and proves a member asks for its own repo, that two members from one repo share a call, and that a member's ref is carried The source lookup prefers an attributed copy over one with no source of its own, so a skill that sits in both scopes still names the repository it came from, and the collection's own source is passed to the installer in its normalized form, without the ref the user wrote after it, because the skills package reads a trailing @name as a skill filter"
+    },
+    {
+      "id": "feat-021",
+      "name": "Publish a change to an existing collection",
+      "description": "kitcrate create publishes a collection that does not exist yet. There was no way to push a change to one that already exists: adding a skill to a collection meant editing its repository by hand. kitcrate publish asks which collection to publish, lists the skills that are not in it yet, lets the user pick which to add, copies those skills into the collection's repository along with any local changes to the members it already has, and pushes. A collection the user cannot push to is published to a new repository under their own account",
+      "dependencies": [
+        "feat-003",
+        "feat-007",
+        "feat-019",
+        "feat-020"
+      ],
+      "status": "in-progress",
+      "evidence": ""
     }
   ]
 }
