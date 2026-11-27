@@ -128,7 +128,7 @@ The remote name is reported in the JSON output and, when it is not `origin`, in 
 `kitcrate create` converges on the published state whether or not a previous run got that far.
 
 - The commit is skipped when the index already matches `HEAD`, which is the case after a failed publish left the collection committed. kitcrate compares the index against `HEAD` rather than reading git's refusal, because that message is translated and comes in more than one wording.
-- A `v0.1.0` tag that already exists is tolerated when it points at `HEAD`. When it points somewhere else, the publish stops: the tag would resolve to an older manifest, so `kitcrate add <source>@v0.1.0` would install the wrong release.
+- A `v0.1.0` tag that already exists is tolerated when it points at `HEAD`. When it points at an earlier commit that kitcrate itself made, the tag moves to the commit this run made, because that commit holds the collection being published. A tag kitcrate did not make is left alone and the publish stops: the tag would resolve to an older manifest, so `kitcrate add <source>@v0.1.0` would install the wrong release.
 - `git init` is checked rather than assumed, so a repository that could not be initialized stops the run instead of carrying on against whatever state is there.
 
 ### Collection name convention

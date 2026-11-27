@@ -162,3 +162,7 @@ All roadmap step 1-3 features are implemented. Remaining work per AGENTS.md:
   - `git init` is checked instead of assumed.
   - The step comments in create.ts now follow AGENTS.md's 11-step flow instead of skipping
     numbers.
+  - A release tag left by an earlier `kitcrate create` run moves to the commit this run made.
+    kitcrate recognises its own collection commits by their subject, so the tag is kitcrate's to
+    move. A tag kitcrate did not make is left alone, and the publish stops with a message that
+    says so.

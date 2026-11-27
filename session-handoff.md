@@ -8,9 +8,10 @@
 
 ## Completed This Session
 
+- [x] Fixed the release-tag guard, which stopped a publish when the collection content changed between runs
 - [x] feat-017 Publish under a free remote name: `src/core/remote.ts` holds the policy, `listRemotes` and `resolveTagCommit` sit in `src/git/index.ts`, and `create.ts` passes `--remote` to `gh`
 - [x] The commit is skipped when the index already matches HEAD, so a failed publish can be retried
-- [x] The `v0.1.0` tag is checked instead of discarded: tolerated at HEAD, refused when it points elsewhere
+- [x] The `v0.1.0` tag is checked instead of discarded: tolerated at HEAD, moved when it points at an earlier kitcrate commit, refused when kitcrate did not make it
 - [x] `git init` is checked instead of assumed
 - [x] Step comments in create.ts follow AGENTS.md's 11-step flow
 - [x] Committed the failing repro first (`8c52566`), then the fix (`e9d350d`), then the docs (`99c6cd4`)
@@ -48,7 +49,8 @@
 | Retry | real CLI, first publish fails then succeeds | pass | exit 0, the collection published from the commit the failed run left |
 | Retry with untracked files | real CLI, a README present | pass | exit 0; git's other wording for an empty commit no longer matters |
 | No free remote | real CLI with `origin` and `github` taken | pass | refused before the commit, the branch had no commits afterwards |
-| Stale tag | real CLI with `v0.1.0` on an older commit | pass | refused before a remote was added, both commits named |
+| Stale tag from kitcrate | real CLI, an earlier create run left `v0.1.0` behind, then the collection changed | pass | the tag moved to the new commit and the publish went through |
+| Stale tag not kitcrate's | real CLI with `v0.1.0` on the author's own commit | pass | refused before a remote was added, the tag left where it was |
 
 ## Files Changed
 
