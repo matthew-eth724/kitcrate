@@ -17,12 +17,33 @@ import type { CommandOptions } from '../core/options.js';
 /** Exit code for a cancelled prompt, matching `create`. */
 const EXIT_CANCELLED = 130;
 
+/** Usage text for `kitcrate add`. */
+export const ADD_USAGE = `Usage: kitcrate add <source> [--global]
+
+Fetch collection.json from a source, install its member skills via skills,
+and write an entry to kitcrate-lock.json.
+
+Arguments:
+  <source>   Collection source: owner/repo[@ref], github:owner/repo[@ref],
+             a git URL, or a local path.
+
+Options:
+  --yes      Non-interactive use: install into this project, no prompts
+  --json     Machine-readable output
+  --global   Install into ~/.agents/skills instead of the project, no prompt
+  --debug    Include stack traces on errors
+
+Example:
+  kitcrate add acme/web-security
+  kitcrate add github:acme/web-security@v1.2.0
+  kitcrate add acme/web-security --global`;
+
 /** Handle the `kitcrate add <source>` command. */
 export async function addCommand(argv: string[], options: CommandOptions): Promise<number> {
   const { yes, json, global } = options;
-  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
-    printAddHelp();
-    return argv.length === 0 ? 1 : 0;
+  if (argv.length === 0) {
+    console.error(ADD_USAGE);
+    return 1;
   }
 
   const source = argv[0];
@@ -193,26 +214,4 @@ async function chooseScope(context: {
  */
 function installedSkillCount(installed: readonly InstalledMember[]): number {
   return new Set(installed.map((member) => member.name)).size;
-}
-
-function printAddHelp(): void {
-  console.error(`Usage: kitcrate add <source> [--global]
-
-Fetch collection.json from a source, install its member skills via skills,
-and write an entry to kitcrate-lock.json.
-
-Arguments:
-  <source>   Collection source: owner/repo[@ref], github:owner/repo[@ref],
-             a git URL, or a local path.
-
-Options:
-  --yes      Non-interactive use: install into this project, no prompts
-  --json     Machine-readable output
-  --global   Install into ~/.agents/skills instead of the project, no prompt
-  --debug    Include stack traces on errors
-
-Example:
-  kitcrate add acme/web-security
-  kitcrate add github:acme/web-security@v1.2.0
-  kitcrate add acme/web-security --global`);
 }

@@ -3,6 +3,18 @@ import { resolveCollection, type ResolvedManifest } from '../core/resolve.js';
 import { installCollectionSkills, listInstalledSkills } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
+/** Usage text for `kitcrate install`. */
+export const INSTALL_USAGE = `Usage: kitcrate install
+
+Restore every collection in kitcrate-lock.json, into the scope each one was
+installed at. Each collection is re-resolved and its manifestHash checked
+against the lockfile, so a manifest that changed underneath you fails loudly.
+
+Options:
+  --yes     Non-interactive use (skip confirmation prompts)
+  --json    Machine-readable output
+  --debug   Include stack traces on errors`;
+
 /** Handle the `kitcrate install` command. */
 export async function installCommand(_argv: string[], options: CommandOptions): Promise<number> {
   const { json } = options;

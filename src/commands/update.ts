@@ -8,6 +8,21 @@ import { resolveCollection, type ResolvedManifest } from '../core/resolve.js';
 import { installCollectionSkills, removeCollectionSkills } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
+/** Usage text for `kitcrate update`. */
+export const UPDATE_USAGE = `Usage: kitcrate update [name]
+
+Re-resolve a collection's ref and diff the new manifest against the locked
+one, adding, removing, or bumping member skills as needed, then rewrite the
+lock entry. With no name, every collection is updated.
+
+Arguments:
+  [name]   Name of the collection to update. Updates all collections when omitted.
+
+Options:
+  --yes     Non-interactive use (skip confirmation prompts)
+  --json    Machine-readable output
+  --debug   Include stack traces on errors`;
+
 /** Handle the `kitcrate update [name]` command. */
 export async function updateCommand(argv: string[], options: CommandOptions): Promise<number> {
   const { json, yes } = options;

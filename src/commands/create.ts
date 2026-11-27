@@ -28,6 +28,22 @@ function say(json: boolean, message: string): void {
   if (!json) console.log(message);
 }
 
+/** Usage text for `kitcrate create`. */
+export const CREATE_USAGE = `Usage: kitcrate create [path]
+
+Publish a collection: discover the skills in a directory, prompt for the
+collection's name, description, and visibility, choose which skills to
+include, write collection.json and a .gitignore, then commit, tag v0.1.0,
+and create the GitHub repository.
+
+Arguments:
+  [path]   Directory holding the skills to publish. Defaults to the current directory.
+
+Options:
+  --yes     Non-interactive use: take every discovered skill, publish private
+  --json    Machine-readable output
+  --debug   Include stack traces on errors`;
+
 /** Handle the `kitcrate create` command. */
 export async function createCommand(argv: string[], options: CommandOptions): Promise<number> {
   const { yes, json } = options;

@@ -3,6 +3,19 @@ import { parseCollectionManifest, type CollectionManifest } from '../core/manife
 import { resolveCollection } from '../core/resolve.js';
 import type { CommandOptions } from '../core/options.js';
 
+/** Usage text for `kitcrate validate`. */
+export const VALIDATE_USAGE = `Usage: kitcrate validate [path]
+
+Check a collection.json and the skills it references, reporting every problem
+found. Defaults to ./collection.json.
+
+Arguments:
+  [path]   Path to the collection.json to check.
+
+Options:
+  --json    Machine-readable output
+  --debug   Include stack traces on errors`;
+
 /** Handle the `kitcrate validate [path]` command. */
 export async function validateCommand(argv: string[], options: CommandOptions): Promise<number> {
   const { json } = options;

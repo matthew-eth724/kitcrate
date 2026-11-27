@@ -2,6 +2,16 @@ import { readLockfile } from '../core/lockfile.js';
 import { listInstalledSkills } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
+/** Usage text for `kitcrate list`. */
+export const LIST_USAGE = `Usage: kitcrate list
+
+Show the installed collections with their source, scope, ref, commit,
+manifest hash, and skills.
+
+Options:
+  --json    Machine-readable output
+  --debug   Include stack traces on errors`;
+
 /** Handle the `kitcrate list` command. */
 export async function listCommand(_argv: string[], options: CommandOptions): Promise<number> {
   const { json } = options;

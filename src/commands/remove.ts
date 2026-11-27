@@ -2,12 +2,39 @@ import { readLockfile, writeLockfile, type Lockfile } from '../core/lockfile.js'
 import { removeCollectionSkills } from '../skills/index.js';
 import type { CommandOptions } from '../core/options.js';
 
+/** Usage text for `kitcrate remove`. */
+export const REMOVE_USAGE = `Usage: kitcrate remove <name>
+
+Remove a collection from kitcrate-lock.json and delete only the skills
+kitcrate installed itself (see ownership rules in AGENTS.md).
+
+A skill is deleted only if:
+  - it is in the collection's skills list, AND
+  - it is not in the collection's preexisting list, AND
+  - it is not claimed by another installed collection.
+
+Before deleting, kitcrate compares the skill's skills-lock.json entry
+with what kitcrate installed. If it no longer matches, the skill is
+left in place and reported.
+
+Arguments:
+  <name>   Name of the collection to remove.
+
+Options:
+  --yes     Non-interactive use (skip confirmation prompts)
+  --json    Machine-readable output
+  --debug   Include stack traces on errors
+
+Example:
+  kitcrate remove web-security
+  kitcrate remove web-security --yes`;
+
 /** Handle the `kitcrate remove <name>` command. */
 export async function removeCommand(argv: string[], options: CommandOptions): Promise<number> {
   const { json, yes } = options;
-  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
-    printRemoveHelp();
-    return argv.length === 0 ? 1 : 0;
+  if (argv.length === 0) {
+    console.error(REMOVE_USAGE);
+    return 1;
   }
 
   const collectionName = argv[0];
@@ -126,32 +153,4 @@ export async function removeCommand(argv: string[], options: CommandOptions): Pr
     console.error(`Failed to remove collection "${collectionName}": ${message}`);
     return 1;
   }
-}
-
-function printRemoveHelp(): void {
-  console.error(`Usage: kitcrate remove <name>
-
-Remove a collection from kitcrate-lock.json and delete only the skills
-kitcrate installed itself (see ownership rules in AGENTS.md).
-
-A skill is deleted only if:
-  - it is in the collection's skills list, AND
-  - it is not in the collection's preexisting list, AND
-  - it is not claimed by another installed collection.
-
-Before deleting, kitcrate compares the skill's skills-lock.json entry
-with what kitcrate installed. If it no longer matches, the skill is
-left in place and reported.
-
-Arguments:
-  <name>   Name of the collection to remove.
-
-Options:
-  --yes     Non-interactive use (skip confirmation prompts)
-  --json    Machine-readable output
-  --debug   Include stack traces on errors
-
-Example:
-  kitcrate remove web-security
-  kitcrate remove web-security --yes`);
 }
