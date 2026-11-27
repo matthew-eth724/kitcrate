@@ -2,11 +2,18 @@
 
 ## Current Objective
 
-- Goal: `kitcrate add` asks whether to install a collection into the project or the user's home, and every later command follows that choice
-- Current status: Implemented and verified. All 16 features complete.
-- Branch / commit: main (`4873b67` was the base; the install-scope work is uncommitted in the working tree)
+- Goal: `kitcrate create` publishes successfully into a repository that already has remotes, and a failed publish can be retried
+- Current status: Both implemented and verified. All 17 features complete.
+- Branch / commit: main (`99c6cd4` is the tip; the working tree is clean)
 
 ## Completed This Session
+
+- [x] feat-017 Publish under a free remote name: `src/core/remote.ts` holds the policy, `listRemotes` and `resolveTagCommit` sit in `src/git/index.ts`, and `create.ts` passes `--remote` to `gh`
+- [x] The commit is skipped when the index already matches HEAD, so a failed publish can be retried
+- [x] The `v0.1.0` tag is checked instead of discarded: tolerated at HEAD, refused when it points elsewhere
+- [x] `git init` is checked instead of assumed
+- [x] Step comments in create.ts follow AGENTS.md's 11-step flow
+- [x] Committed the failing repro first (`8c52566`), then the fix (`e9d350d`), then the docs (`99c6cd4`)
 
 - [x] Loaded the `poteto-mode` skill and its Feature playbook; wrote the throughput checkpoint in `todo.md`
 - [x] Confirmed upstream `skills` already implements both scopes: `scope: 'global'` installs to `$HOME/.agents/skills`, `scope: 'project'` to `<cwd>/.agents/skills`. Verified by running a real global install against a sandboxed `HOME`.
@@ -29,7 +36,7 @@
 |---|---|---|---|
 | Type check | `pnpm typecheck` | pass | strict, no `any`, both configs |
 | Lint | `pnpm lint` | pass | prettier clean |
-| Tests | `pnpm test` | pass | 80/80 across 8 files |
+| Tests | `pnpm test` | pass | 88/88 across 9 files |
 | Build | `pnpm build` | pass | |
 | Project scope | pty harness in `/tmp/pty_drive.py` | pass | prompt rendered both options; Enter put the skill in `<project>/.agents/skills`, the home directory untouched |
 | Global scope | pty harness | pass | Down then Enter put the skill in `$HOME/.agents/skills`, the project directory untouched |
@@ -37,9 +44,19 @@
 | Remove follows the scope | `kitcrate remove --yes` on a global collection | pass | removed from the home, the project left alone |
 | Install follows the scope | skill deleted by hand, then `kitcrate install --yes` | pass | restored into the home, the project left alone |
 | Counts | `add` output | pass | "Installed 1 skill(s)", not one per agent |
+| Remote conflict | real CLI over a repo with an existing `origin` | pass | published to `github`, `origin` left on its original URL, exit 0 |
+| Retry | real CLI, first publish fails then succeeds | pass | exit 0, the collection published from the commit the failed run left |
+| Retry with untracked files | real CLI, a README present | pass | exit 0; git's other wording for an empty commit no longer matters |
+| No free remote | real CLI with `origin` and `github` taken | pass | refused before the commit, the branch had no commits afterwards |
+| Stale tag | real CLI with `v0.1.0` on an older commit | pass | refused before a remote was added, both commits named |
 
 ## Files Changed
 
+- `src/core/remote.ts` (new)
+- `src/commands/create.ts`
+- `src/git/index.ts`
+- `test/remote.test.ts` (new)
+- `test/create.test.ts`
 - `src/core/scope.ts` (new)
 - `src/core/lockfile.ts`, `src/core/options.ts`, `src/core/resolve.ts`
 - `src/commands/{add,install,update,remove,list}.ts`
@@ -62,6 +79,7 @@
 ## Blockers / Risks
 
 - None.
+- `kitcrate create` now adds a second remote when `origin` is taken. The existing remote is left untouched, so a later bare `git push` still goes to `origin`, not to the new collection repository.
 
 ## Next Session Startup
 
@@ -74,3 +92,4 @@
 
 - `update` still has no integration coverage, at either scope. `test/add.test.ts` drives `add`, `install`, and `remove` against a local git repository with a sandboxed `HOME`; `update` is the obvious next gap.
 - Consider the "copy skills into the repo" mode for `create`, which AGENTS.md lists in the publish flow but is not built.
+- `create` still only reports credential files that were tracked when the run started. A retry finds them already unstaged, so the "excluded from publish" report comes back empty even though the files are still kept out of the commit.
